@@ -1,0 +1,20 @@
+[package]
+name = "qrypton-vault-contract"
+description = "Qrypton Vault: post-quantum (ML-DSA) institutional custody vault for Soroban."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+qrypton-types = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
