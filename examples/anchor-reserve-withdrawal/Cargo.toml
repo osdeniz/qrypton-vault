@@ -1,0 +1,18 @@
+[package]
+name = "qrypton-example-anchor-reserve"
+description = "Example: an anchor moves funds out of its reserve vault with 2-of-3 PQ approvals."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "anchor-reserve-withdrawal"
+path = "src/main.rs"
+
+[dependencies]
+qrypton-sdk = { workspace = true }
+qrypton-types = { workspace = true, features = ["std"] }
+tokio = { workspace = true }
