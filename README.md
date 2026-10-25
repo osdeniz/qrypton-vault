@@ -169,7 +169,7 @@ The first 30-day phase covers M1 and M2 plus the core policy layer (per-withdraw
 
 ## Team
 
-[TEAM — to be filled by the author]
+Ömer Salih Deniz — backend engineer with five years at crypto exchanges and blockchain companies: custody integrations, an in-house custody stack (HSM key storage, signer, policy rules) and 20+ blockchain integrations. Stellar Ambassador (Türkiye).
 
 ## Status
 
