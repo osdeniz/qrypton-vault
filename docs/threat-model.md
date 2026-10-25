@@ -26,7 +26,7 @@ A short overview. A full threat model is part of milestone M4 together with the 
 - Approvers decode and display the exact bytes they sign; they never sign opaque blobs.
 - Policy limits and allowlist bound the damage of a successful quorum compromise.
 - Time-locked, cancellable signer rotation; policy changes require PQ quorum.
-- No custom cryptography: ML-DSA verification by the Soroban host, signing by HSM firmware or an audited library.
+- No custom cryptography: ML-DSA verification by the Soroban host, signing by HSM firmware in production (in development, an established open-source Rust ML-DSA library that has not yet been independently audited).
 
 ## Out of scope
 

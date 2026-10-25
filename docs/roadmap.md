@@ -17,7 +17,7 @@ M1 depends on Protocol 30 (which includes [CAP-0087](https://github.com/stellar/
 ## M2 — Signer, software keystore, M-of-N approval
 
 - `qrypton-signer` CLI: `keygen`, `show-pubkey`, `approve-withdraw`.
-- `SoftwareKeystore` backend (encrypted at rest; development and testnet only), using an audited ML-DSA library.
+- `SoftwareKeystore` backend (encrypted at rest; development and testnet only), using an established open-source Rust ML-DSA library (not yet independently audited; production signing moves to the HSM in M4).
 - Approval flow: decode and display → policy pre-check → sign → approval.
 - Governance flows: `set_policy`, `propose_key_rotation`, `execute_key_rotation`, `cancel_key_rotation`.
 

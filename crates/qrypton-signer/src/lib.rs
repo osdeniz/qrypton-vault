@@ -11,8 +11,9 @@
 //!   approval.
 //!
 //! This crate does not implement ML-DSA. Signing is delegated to the key
-//! backend: an audited ML-DSA library for the software keystore, the HSM
-//! firmware for PKCS#11.
+//! backend: in development, an established open-source Rust ML-DSA library
+//! that has not yet been independently audited; in production, the HSM
+//! firmware via PKCS#11.
 //!
 //! Status: pre-alpha. Interfaces are defined; bodies are `todo!()`.
 

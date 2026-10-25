@@ -52,7 +52,7 @@ Value at stake, observed 2026-10-25:
 | **NSA CNSA 2.0** — Sept 2022 ([advisory](https://media.defense.gov/2025/May/30/2003728741/-1/-1/0/CSA_CNSA_2.0_ALGORITHMS.PDF)) | National security systems: software/firmware signing to prefer CNSA 2.0 by 2025 and use it exclusively by 2030; most other categories exclusive by 2033; transition complete by 2035 |
 | **EU Coordinated Implementation Roadmap** — June 2025 ([European Commission](https://digital-strategy.ec.europa.eu/en/library/coordinated-implementation-roadmap-transition-post-quantum-cryptography)) | Member States complete first steps **by end of 2026**; high-risk use cases transitioned **no later than end of 2030**; as many systems as practically feasible **by 2035** |
 
-Custody of financial assets is likely to fall into the high-risk category for most institutions. Their procurement cycles are years long, so the custody stack they will use in 2030 needs to exist and be audited well before then.
+Custody of financial assets is likely to fall into the high-risk category for most institutions. Their procurement cycles are years long, so the custody stack they will use in 2030 needs to exist and be independently reviewed well before then.
 
 ## Stellar's Quantum Preparedness Plan
 
@@ -77,7 +77,7 @@ As far as we know, no custody product institutions can use directly on Stellar y
 
 **Flow in brief.** An operator builds a withdrawal request with the SDK. Approvers each review it in `qrypton-signer` and sign it on their HSM. Once M approvals are collected, the SDK submits the withdrawal with the admin's classical signature. The contract verifies everything and transfers the funds, and the institution's back office reconciles from the emitted events.
 
-The contract never implements ML-DSA; verification is delegated to the Soroban host behind a `PqVerifier` trait. The off-chain components do not implement ML-DSA either: signing is delegated to HSM firmware or an audited library.
+The contract never implements ML-DSA; verification is delegated to the Soroban host behind a `PqVerifier` trait. The off-chain components do not implement ML-DSA either: in production, signing happens in HSM firmware; in development, it uses an established open-source Rust ML-DSA library that has not yet been independently audited.
 
 ## Architecture
 
