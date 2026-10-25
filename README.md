@@ -145,7 +145,7 @@ More detail: [docs/architecture.md](docs/architecture.md) · [docs/threat-model.
 
 ## Who it is for
 
-- **Anchors.** Keep fiat-backed reserves in a vault so that moving reserve funds to operational wallets needs approvals from treasury, compliance and risk, within daily limits and only to allowlisted wallets.
+- **Anchors.** Keep fiat-backed reserves in a vault so that moving reserve funds to operational wallets needs approvals from treasury, compliance and risk, within per-withdrawal limits (daily limits follow in the next phase) and only to allowlisted wallets.
 - **Corporate treasuries.** Run on-chain treasury wallets under the same maker-checker, limit and audit controls the institution applies to bank payments, with post-quantum keys from day one.
 - **RWA issuers.** Hold redemption and distribution pools for tokenized funds or bonds so that outflows need M-of-N PQ approval, and each one is recorded as an event for the fund administrator.
 - **Custody providers.** Offer clients a post-quantum custody option on Stellar built on HSM infrastructure they already operate, without each client building its own contracts.
