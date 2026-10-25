@@ -33,7 +33,7 @@ A short overview. A full threat model is part of milestone M4 together with the 
 - PQ quorum required for every outflow and every governance action; a CRQC that breaks the operator key still lacks PQ approvals.
 - Operator change needs only the quorum, so a lost or broken classical key cannot lock the vault; the operator cannot cancel it alone, so a stolen operator key cannot block recovery.
 - Operator change and key rotation are time-locked and publicly visible; at most one operator change can be pending; executing a key rotation cancels any pending operator change.
-- **Pre-allowlisted rescue vault:** withdrawals to it skip amount limits and the allowlist, so a copied quorum is answered by moving funds out within the time lock. Policy changes need the operator, so a quorum-only attacker cannot remove the rescue vault.
+- **Pre-allowlisted rescue vault:** withdrawals to it skip amount limits and the allowlist, so a copied quorum is answered by moving funds out within the time lock. The rescue vault is controlled by a separate quorum and operator, preferably on a separate HSM, so the keys an attacker copied do not reach it. Policy changes need the operator, so a quorum-only attacker cannot remove the rescue vault.
 - Canonical, domain-separated messages bound to network, vault, action, nonce and expiry; one nonce space for all actions; cancellations bound to a specific proposal.
 - Approvers decode and display the exact bytes they sign; they never sign opaque blobs.
 - Policy limits and allowlist bound the damage of a compromised quorum plus operator.
@@ -44,6 +44,7 @@ A short overview. A full threat model is part of milestone M4 together with the 
 
 - A stolen quorum whose theft goes unnoticed for the whole time lock can replace the operator and then control the vault. Monitoring of `OperatorChangeProposed` events is therefore part of operating the vault.
 - If the institution has lost (not just leaked) its quorum, the rescue path is unavailable.
+- If the rescue vault shares keys or HSMs with the main vault, the rescue path offers no protection against key copying; separation is an operational requirement.
 - A quorum-only attacker can repeatedly propose operator changes that the institution must cancel; this is a nuisance, not a loss of funds.
 
 ## Out of scope

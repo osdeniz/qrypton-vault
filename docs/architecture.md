@@ -68,7 +68,7 @@ flowchart TB
 
 ### Rescue vault
 
-The policy names a pre-allowlisted **rescue vault**, typically another Qrypton Vault held by the same institution. Withdrawals to it still need the operator and the quorum, but skip amount limits and the allowlist, so all funds can be moved in one step. Any future rolling-window limit must exempt it as well.
+The policy names a pre-allowlisted **rescue vault**, typically another Qrypton Vault held by the same institution. The rescue vault must be controlled by a **separate** quorum and operator, preferably on a separate HSM; if it shared the main vault's keys, an attacker who copied them could reach the rescue vault too. Withdrawals to it still need the operator and the quorum, but skip amount limits and the allowlist, so all funds can be moved in one step. Any future rolling-window limit must exempt it as well.
 
 A time lock alone only gives time to notice an attack. The rescue vault turns that time into a response: if keys were copied rather than lost, the institution still holds the operator key and the quorum and can move funds to the rescue vault before the attacker's operator change executes.
 

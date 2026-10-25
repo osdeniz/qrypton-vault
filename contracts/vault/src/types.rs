@@ -80,7 +80,8 @@ pub struct Policy {
     /// If non-empty, withdrawals may only go to these addresses.
     pub allowlist: Vec<Address>,
     /// Pre-allowlisted rescue vault (typically another Qrypton Vault controlled
-    /// by the same institution). Withdrawals to it still need the operator and
+    /// by the same institution, with its own, separate signer set and operator,
+    /// preferably on a separate HSM). Withdrawals to it still need the operator and
     /// the PQ quorum, but skip amount limits and the allowlist, so all funds
     /// can be moved to safety within an operator-change time lock.
     pub rescue_vault: Option<Address>,
