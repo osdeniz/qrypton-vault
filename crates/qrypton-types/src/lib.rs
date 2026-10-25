@@ -5,7 +5,7 @@
 //! * the post-quantum algorithm identifiers and their encoded sizes ([`algorithm`]),
 //! * the canonical byte format of every message a PQ signer approves ([`message`]),
 //! * the off-chain representation of withdrawal requests, approvals and policy
-//!   ([`request`], [`approval`], [`policy`]).
+//!   ([`request`], [`governance`], [`approval`], [`policy`]).
 //!
 //! The crate is `no_std` so the Soroban contract can share constants and the
 //! message layout with off-chain code. Owned types require the `alloc` feature.
@@ -23,6 +23,8 @@ pub mod message;
 #[cfg(feature = "alloc")]
 pub mod approval;
 #[cfg(feature = "alloc")]
+pub mod governance;
+#[cfg(feature = "alloc")]
 pub mod policy;
 #[cfg(feature = "alloc")]
 pub mod request;
@@ -32,6 +34,8 @@ pub use message::{DomainTag, MessageError};
 
 #[cfg(feature = "alloc")]
 pub use approval::{PqApproval, PqPublicKey, PqSignature};
+#[cfg(feature = "alloc")]
+pub use governance::{GovernanceAction, GovernanceMessage};
 #[cfg(feature = "alloc")]
 pub use policy::{Policy, TokenLimit};
 #[cfg(feature = "alloc")]

@@ -25,6 +25,36 @@
 //! | nonce           | `u64`, 8 bytes                                        |
 //! | expires_at      | `u64`, 8 bytes, ledger timestamp (UNIX seconds)       |
 //!
+//! # Governance messages
+//!
+//! Governance actions are approved over the same envelope, with an
+//! action-specific payload and their own domain tag. Like withdrawals, every
+//! governance message is bound to the network, the vault, a single-use nonce
+//! and an expiry.
+//!
+//! | Field           | Encoding                                              |
+//! |-----------------|-------------------------------------------------------|
+//! | domain tag      | `u8 length \|\| tag` (see [`DomainTag`])             |
+//! | network id      | 32 bytes, `SHA-256(network passphrase)`               |
+//! | vault           | `addr` — the vault contract address                   |
+//! | payload         | action-specific, see below                            |
+//! | nonce           | `u64`, 8 bytes                                        |
+//! | expires_at      | `u64`, 8 bytes, ledger timestamp (UNIX seconds)       |
+//!
+//! | Action                  | Tag                                         | Payload                                        |
+//! |-------------------------|---------------------------------------------|------------------------------------------------|
+//! | propose operator change | `qrypton-vault/set-operator/v1`             | `addr` — the new operator                      |
+//! | propose key rotation    | `qrypton-vault/rotate-keys/v1`              | 32 bytes, SHA-256 of the new signer set and threshold |
+//! | set policy              | `qrypton-vault/set-policy/v1`               | 32 bytes, SHA-256 of the XDR-encoded policy    |
+//! | cancel operator change  | `qrypton-vault/cancel-operator-change/v1`   | 32 bytes, hash of the pending proposal         |
+//! | cancel key rotation     | `qrypton-vault/cancel-key-rotation/v1`      | 32 bytes, hash of the pending proposal         |
+//!
+//! Cancellations commit to the hash of the specific pending proposal, so an
+//! approval to cancel one proposal cannot cancel a later one.
+//!
+//! Nonces are single-use across all actions of a vault: a nonce consumed by a
+//! withdrawal cannot be reused by a governance action and vice versa.
+//!
 //! # Canonical serialisation
 //!
 //! The encoding is fixed-order, fixed-width for scalars and length-prefixed for
@@ -47,10 +77,14 @@
 pub enum DomainTag {
     /// Approval of a withdrawal from the vault.
     WithdrawV1,
+    /// Approval of a proposed operator change (time-locked).
+    SetOperatorV1,
+    /// Approval of a proposed signer-set rotation (time-locked).
+    RotateKeysV1,
     /// Approval of a policy change.
     SetPolicyV1,
-    /// Approval of a proposed signer-set rotation.
-    ProposeKeyRotationV1,
+    /// Approval of cancelling a pending operator change.
+    CancelOperatorChangeV1,
     /// Approval of cancelling a pending signer-set rotation.
     CancelKeyRotationV1,
 }
@@ -60,8 +94,10 @@ impl DomainTag {
     pub const fn as_bytes(self) -> &'static [u8] {
         match self {
             DomainTag::WithdrawV1 => b"qrypton-vault/withdraw/v1",
+            DomainTag::SetOperatorV1 => b"qrypton-vault/set-operator/v1",
+            DomainTag::RotateKeysV1 => b"qrypton-vault/rotate-keys/v1",
             DomainTag::SetPolicyV1 => b"qrypton-vault/set-policy/v1",
-            DomainTag::ProposeKeyRotationV1 => b"qrypton-vault/propose-key-rotation/v1",
+            DomainTag::CancelOperatorChangeV1 => b"qrypton-vault/cancel-operator-change/v1",
             DomainTag::CancelKeyRotationV1 => b"qrypton-vault/cancel-key-rotation/v1",
         }
     }

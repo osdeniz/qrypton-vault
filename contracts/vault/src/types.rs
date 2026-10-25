@@ -42,7 +42,14 @@ pub struct WithdrawRequest {
     pub expires_at: u64,
 }
 
-/// PQ authorization for a governance action (policy change, rotation).
+/// PQ authorization for a governance action.
+///
+/// `approvals` are ML-DSA signatures over the canonical governance message
+/// for the action, which binds the action's own domain tag
+/// (`qrypton-vault/set-operator/v1`, `.../rotate-keys/v1`, `.../set-policy/v1`,
+/// `.../cancel-operator-change/v1`, `.../cancel-key-rotation/v1`), the network
+/// id, this vault's address, the action payload, `nonce` and `expires_at`
+/// (see `qrypton_types::message`). The nonce space is shared with withdrawals.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GovernanceAuth {

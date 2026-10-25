@@ -121,7 +121,7 @@ impl QryptonVault {
     ///
     /// Requires `operator.require_auth()` and `auth` approvals from the *current*
     /// signer set at the *current* threshold over the
-    /// `qrypton-vault/propose-key-rotation/v1` message. The proposal becomes
+    /// `qrypton-vault/rotate-keys/v1` message. The proposal becomes
     /// executable only after a time lock, giving the institution a window to
     /// detect and cancel an unauthorized rotation. Emits [`KeyRotationProposed`].
     pub fn propose_key_rotation(
