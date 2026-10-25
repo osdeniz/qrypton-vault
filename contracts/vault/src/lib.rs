@@ -1,16 +1,36 @@
 //! # Qrypton Vault contract
 //!
-//! A Soroban custody vault in which no withdrawal executes without both:
+//! A Soroban custody vault governed by a post-quantum quorum.
 //!
-//! 1. a classical Stellar authorization from the vault's `operator` address
-//!    (`require_auth`, which may itself be a multisig account or a smart
-//!    account), and
-//! 2. ML-DSA (NIST FIPS 204) approvals from at least `threshold` of the
-//!    vault's registered post-quantum signers (M-of-N).
+//! **Authority model**
+//!
+//! * The **PQ quorum** — at least `threshold` of the vault's registered ML-DSA
+//!   (NIST FIPS 204) signers — is the root of authority.
+//! * The **operator** is a classical Stellar address (`require_auth`; may be a
+//!   multisig or contract account) that acts as a second factor for day-to-day
+//!   operations: every withdrawal needs both the operator and the PQ quorum.
+//! * A stolen operator key alone cannot move funds or change anything.
+//! * A stolen quorum alone can only replace the operator, and only after a
+//!   public time lock during which the institution can cancel the change or
+//!   move funds to a pre-allowlisted rescue vault.
+//!
+//! | Function                   | Operator | PQ quorum | Time lock |
+//! |----------------------------|:--------:|:---------:|:---------:|
+//! | `withdraw`                 | ✓        | ✓         |           |
+//! | `set_policy`               | ✓        | ✓         |           |
+//! | `propose_key_rotation`     | ✓        | ✓         | ✓         |
+//! | `cancel_key_rotation`      | ✓        | ✓         |           |
+//! | `propose_operator_change`  |          | ✓         | ✓         |
+//! | `cancel_operator_change`   |          | ✓         |           |
+//! | `execute_*`                | anyone, after the time lock      | |
 //!
 //! On top of that the vault enforces an institutional policy (per-token limits,
-//! recipient allowlist), single-use nonces, request expiry, a time-locked
-//! signer-set rotation, and emits audit events for every state change.
+//! recipient allowlist, rescue vault), single-use nonces and request expiry,
+//! and emits an audit event for every state change.
+//!
+//! There is deliberately **no upgrade entry point**: the deployed code cannot
+//! be replaced. Migration to a new version means withdrawing to a new vault
+//! under the normal authorization rules.
 //!
 //! ML-DSA verification sits behind the [`verifier::PqVerifier`] trait so the
 //! contract can use the native Soroban host function once it is available on
@@ -34,12 +54,13 @@ mod test;
 
 pub use error::Error;
 pub use events::{
-    Deposited, KeyRotationCancelled, KeyRotationExecuted, KeyRotationProposed, PolicyUpdated,
+    Deposited, KeyRotationCancelled, KeyRotationExecuted, KeyRotationProposed,
+    OperatorChangeCancelled, OperatorChangeExecuted, OperatorChangeProposed, PolicyUpdated,
     WithdrawExecuted, WithdrawRejected,
 };
 pub use types::{
-    GovernanceAuth, PendingRotation, Policy, PqApproval, PqPublicKey, PqSignature, RejectReason,
-    TokenLimit, WithdrawOutcome, WithdrawRequest,
+    CancelCause, GovernanceAuth, PendingOperatorChange, PendingRotation, Policy, PqApproval,
+    PqPublicKey, PqSignature, RejectReason, TokenLimit, WithdrawOutcome, WithdrawRequest,
 };
 
 use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
@@ -52,11 +73,11 @@ impl QryptonVault {
     /// Initializes the vault. Runs once, atomically with deployment, so the
     /// vault can never be observed (or front-run) in an uninitialized state.
     ///
-    /// * `operator` — classical Stellar address whose authorization is required
-    ///   for every withdrawal and governance action, in addition to PQ approvals.
+    /// * `operator` — classical Stellar address that co-authorizes withdrawals
+    ///   and day-to-day governance.
     /// * `pq_signers` — the initial ML-DSA signer set (N keys, no duplicates).
     /// * `threshold` — number of PQ approvals required (M), `1 <= M <= N`.
-    /// * `policy` — initial withdrawal policy.
+    /// * `policy` — initial withdrawal policy, including the rescue vault.
     ///
     /// Panics with [`Error::InvalidThreshold`], [`Error::DuplicateSigner`] or
     /// [`Error::InvalidPolicy`] on invalid input.
@@ -89,16 +110,17 @@ impl QryptonVault {
     /// 1. **Expiry** — `request.expires_at` must be later than the current
     ///    ledger timestamp.
     /// 2. **Nonce** — `request.nonce` must not have been consumed before
-    ///    (replay protection).
+    ///    (replay protection; shared with governance actions).
     /// 3. **Policy** — the token has a limit entry, the amount is within the
-    ///    per-withdrawal and rolling-window limits, and the recipient is on the
-    ///    allowlist if one is configured.
+    ///    per-withdrawal limit, and the recipient is on the allowlist if one is
+    ///    configured. Withdrawals to the policy's rescue vault skip the amount
+    ///    limits and the allowlist, so funds can be moved to safety in one step.
     /// 4. **M-of-N ML-DSA** — rebuild the canonical `qrypton-vault/withdraw/v1`
     ///    message from `request`, the network id and this contract's address;
     ///    check approvals reference distinct signer indices of the current
     ///    signer set; verify each signature with [`verifier::PqVerifier`];
     ///    require at least `threshold` valid approvals.
-    /// 5. **Transfer** — mark the nonce consumed, update window accounting,
+    /// 5. **Transfer** — mark the nonce consumed, update limit accounting,
     ///    then call the token contract's `transfer` (state is updated before
     ///    the external call).
     /// 6. **Event** — emit [`WithdrawExecuted`].
@@ -117,13 +139,57 @@ impl QryptonVault {
         todo!()
     }
 
+    // ---------------------------------------------------------------------
+    // Operator change — the recovery path (PQ quorum only, time-locked)
+    // ---------------------------------------------------------------------
+
+    /// Proposes replacing the operator.
+    ///
+    /// Requires **only** current-threshold PQ approvals over the
+    /// `qrypton-vault/set-operator/v1` message; the current operator's
+    /// signature is not required, so a lost or compromised classical key cannot
+    /// lock the vault. At most one operator change can be pending
+    /// ([`Error::OperatorChangeAlreadyPending`]). The change becomes executable
+    /// after a public time lock. Emits [`OperatorChangeProposed`].
+    pub fn propose_operator_change(
+        env: Env,
+        new_operator: Address,
+        auth: GovernanceAuth,
+    ) -> Result<(), Error> {
+        todo!()
+    }
+
+    /// Activates the pending operator once its time lock has elapsed.
+    ///
+    /// Permissionless: anyone may call it, because the change was approved by
+    /// the quorum at proposal time and the waiting period has passed. Emits
+    /// [`OperatorChangeExecuted`].
+    pub fn execute_operator_change(env: Env) -> Result<(), Error> {
+        todo!()
+    }
+
+    /// Cancels the pending operator change.
+    ///
+    /// Requires **only** current-threshold PQ approvals over the
+    /// `qrypton-vault/cancel-operator-change/v1` message, which commits to the
+    /// hash of the pending proposal. The operator cannot cancel on its own, so
+    /// a stolen classical key cannot block recovery. Emits
+    /// [`OperatorChangeCancelled`] with [`CancelCause::Quorum`].
+    pub fn cancel_operator_change(env: Env, auth: GovernanceAuth) -> Result<(), Error> {
+        todo!()
+    }
+
+    // ---------------------------------------------------------------------
+    // Signer-set rotation (operator + PQ quorum, time-locked)
+    // ---------------------------------------------------------------------
+
     /// Proposes replacing the PQ signer set and threshold.
     ///
-    /// Requires `operator.require_auth()` and `auth` approvals from the *current*
-    /// signer set at the *current* threshold over the
-    /// `qrypton-vault/rotate-keys/v1` message. The proposal becomes
-    /// executable only after a time lock, giving the institution a window to
-    /// detect and cancel an unauthorized rotation. Emits [`KeyRotationProposed`].
+    /// Requires `operator.require_auth()` and current-threshold PQ approvals
+    /// over the `qrypton-vault/rotate-keys/v1` message. At most one rotation can
+    /// be pending. The proposal becomes executable only after a time lock,
+    /// giving the institution a window to detect and cancel an unauthorized
+    /// rotation. Emits [`KeyRotationProposed`].
     pub fn propose_key_rotation(
         env: Env,
         new_signers: Vec<PqPublicKey>,
@@ -138,24 +204,35 @@ impl QryptonVault {
     /// Permissionless: anyone may call it after the time lock, because the
     /// rotation was already approved at proposal time. Emits
     /// [`KeyRotationExecuted`].
+    ///
+    /// Executing a rotation **cancels any pending operator change** (emitting
+    /// [`OperatorChangeCancelled`] with [`CancelCause::KeyRotation`]): that
+    /// proposal was approved by keys that may just have been removed, and must
+    /// not be executable afterwards.
     pub fn execute_key_rotation(env: Env) -> Result<(), Error> {
         todo!()
     }
 
     /// Cancels a pending rotation before it executes.
     ///
-    /// Requires `operator.require_auth()` and current-threshold approvals over the
-    /// `qrypton-vault/cancel-key-rotation/v1` message. Emits
-    /// [`KeyRotationCancelled`].
+    /// Requires `operator.require_auth()` and current-threshold PQ approvals
+    /// over the `qrypton-vault/cancel-key-rotation/v1` message, which commits
+    /// to the hash of the pending proposal. Emits [`KeyRotationCancelled`].
     pub fn cancel_key_rotation(env: Env, auth: GovernanceAuth) -> Result<(), Error> {
         todo!()
     }
 
+    // ---------------------------------------------------------------------
+    // Policy (operator + PQ quorum)
+    // ---------------------------------------------------------------------
+
     /// Replaces the withdrawal policy.
     ///
-    /// Requires `operator.require_auth()` and approvals from the current signer set
-    /// at the current threshold over the `qrypton-vault/set-policy/v1` message,
-    /// which commits to the hash of the new policy. Emits [`PolicyUpdated`].
+    /// Requires `operator.require_auth()` and current-threshold PQ approvals
+    /// over the `qrypton-vault/set-policy/v1` message, which commits to the
+    /// hash of the new policy. Requiring the operator here means a stolen
+    /// quorum cannot remove the rescue vault or change limits during an
+    /// operator-change time lock. Emits [`PolicyUpdated`].
     pub fn set_policy(env: Env, policy: Policy, auth: GovernanceAuth) -> Result<(), Error> {
         todo!()
     }
@@ -164,7 +241,7 @@ impl QryptonVault {
     // Read-only views
     // ---------------------------------------------------------------------
 
-    /// The classical operator address.
+    /// The current operator address.
     pub fn operator(env: Env) -> Address {
         todo!()
     }
@@ -181,6 +258,11 @@ impl QryptonVault {
 
     /// The current withdrawal policy.
     pub fn policy(env: Env) -> Policy {
+        todo!()
+    }
+
+    /// The pending operator change, if any.
+    pub fn pending_operator_change(env: Env) -> Option<PendingOperatorChange> {
         todo!()
     }
 

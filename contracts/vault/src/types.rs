@@ -64,6 +64,7 @@ pub struct GovernanceAuth {
 pub struct TokenLimit {
     pub token: Address,
     pub max_per_withdrawal: i128,
+    /// Rolling-window cap (next phase; not enforced in the first phase).
     pub max_per_window: i128,
 }
 
@@ -73,9 +74,16 @@ pub struct TokenLimit {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Policy {
     pub limits: Vec<TokenLimit>,
+    /// Rolling-window length for `max_per_window` (next phase; not enforced in
+    /// the first phase).
     pub window_seconds: u64,
     /// If non-empty, withdrawals may only go to these addresses.
     pub allowlist: Vec<Address>,
+    /// Pre-allowlisted rescue vault (typically another Qrypton Vault controlled
+    /// by the same institution). Withdrawals to it still need the operator and
+    /// the PQ quorum, but skip amount limits and the allowlist, so all funds
+    /// can be moved to safety within an operator-change time lock.
+    pub rescue_vault: Option<Address>,
 }
 
 /// A proposed signer-set rotation awaiting its time lock.
@@ -86,6 +94,26 @@ pub struct PendingRotation {
     pub new_threshold: u32,
     /// Ledger timestamp from which `execute_key_rotation` succeeds.
     pub executable_at: u64,
+}
+
+/// A proposed operator change awaiting its time lock.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingOperatorChange {
+    pub new_operator: Address,
+    /// Ledger timestamp from which `execute_operator_change` succeeds.
+    pub executable_at: u64,
+}
+
+/// Why a pending operator change was cancelled.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum CancelCause {
+    /// Cancelled by the PQ quorum.
+    Quorum = 1,
+    /// Invalidated because a signer-set rotation executed.
+    KeyRotation = 2,
 }
 
 /// Why a withdrawal was rejected without failing the invocation.

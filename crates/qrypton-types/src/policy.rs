@@ -13,7 +13,7 @@ pub struct TokenLimit {
     pub token: AddressBytes,
     /// Maximum amount for a single withdrawal.
     pub max_per_withdrawal: i128,
-    /// Maximum cumulative amount within one rolling window.
+    /// Maximum cumulative amount within one rolling window (next phase).
     pub max_per_window: i128,
 }
 
@@ -27,4 +27,7 @@ pub struct Policy {
     pub window_seconds: u64,
     /// If non-empty, withdrawals may only go to these addresses.
     pub allowlist: Vec<AddressBytes>,
+    /// Pre-allowlisted rescue vault; withdrawals to it skip amount limits and
+    /// the allowlist (operator and PQ quorum are still required).
+    pub rescue_vault: Option<AddressBytes>,
 }

@@ -29,4 +29,10 @@ pub enum Error {
     RotationAlreadyPending = 11,
     /// The rotation time lock has not elapsed yet.
     RotationTimelocked = 12,
+    /// No operator change is pending.
+    NoPendingOperatorChange = 13,
+    /// An operator change is already pending.
+    OperatorChangeAlreadyPending = 14,
+    /// The operator-change time lock has not elapsed yet.
+    OperatorChangeTimelocked = 15,
 }

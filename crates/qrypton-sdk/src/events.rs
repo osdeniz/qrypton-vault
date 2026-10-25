@@ -48,6 +48,18 @@ pub enum VaultEvent {
     PolicyUpdated {
         policy_hash: [u8; 32],
     },
+    OperatorChangeProposed {
+        new_operator: String,
+        executable_at: u64,
+    },
+    OperatorChangeExecuted {
+        old_operator: String,
+        new_operator: String,
+    },
+    OperatorChangeCancelled {
+        new_operator: String,
+        cause: String,
+    },
 }
 
 /// A live subscription to vault events.

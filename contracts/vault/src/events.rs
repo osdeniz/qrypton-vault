@@ -3,7 +3,7 @@
 
 use soroban_sdk::{contractevent, Address, BytesN};
 
-use crate::types::RejectReason;
+use crate::types::{CancelCause, RejectReason};
 
 /// Funds were deposited into the vault.
 #[contractevent]
@@ -74,4 +74,31 @@ pub struct KeyRotationCancelled {
 pub struct PolicyUpdated {
     /// SHA-256 over the XDR encoding of the new policy.
     pub policy_hash: BytesN<32>,
+}
+
+/// A new operator was proposed by the PQ quorum and is time-locked.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OperatorChangeProposed {
+    #[topic]
+    pub new_operator: Address,
+    pub executable_at: u64,
+}
+
+/// The pending operator became active.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OperatorChangeExecuted {
+    pub old_operator: Address,
+    #[topic]
+    pub new_operator: Address,
+}
+
+/// The pending operator change was cancelled.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OperatorChangeCancelled {
+    #[topic]
+    pub new_operator: Address,
+    pub cause: CancelCause,
 }

@@ -13,7 +13,10 @@ pub enum GovernanceAction {
     /// Propose replacing the classical operator (time-locked).
     SetOperator { new_operator: AddressBytes },
     /// Propose replacing the PQ signer set and threshold (time-locked).
-    RotateKeys { new_signers: Vec<PqPublicKey>, new_threshold: u32 },
+    RotateKeys {
+        new_signers: Vec<PqPublicKey>,
+        new_threshold: u32,
+    },
     /// Replace the withdrawal policy.
     SetPolicy { policy: Policy },
     /// Cancel the pending operator change identified by its proposal hash.
