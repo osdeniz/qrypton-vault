@@ -2,7 +2,7 @@
 //!
 //! A Soroban custody vault in which no withdrawal executes without both:
 //!
-//! 1. a classical Stellar authorization from the vault's `admin` address
+//! 1. a classical Stellar authorization from the vault's `operator` address
 //!    (`require_auth`, which may itself be a multisig account or a smart
 //!    account), and
 //! 2. ML-DSA (NIST FIPS 204) approvals from at least `threshold` of the
@@ -52,7 +52,7 @@ impl QryptonVault {
     /// Initializes the vault. Runs once, atomically with deployment, so the
     /// vault can never be observed (or front-run) in an uninitialized state.
     ///
-    /// * `admin` — classical Stellar address whose authorization is required
+    /// * `operator` — classical Stellar address whose authorization is required
     ///   for every withdrawal and governance action, in addition to PQ approvals.
     /// * `pq_signers` — the initial ML-DSA signer set (N keys, no duplicates).
     /// * `threshold` — number of PQ approvals required (M), `1 <= M <= N`.
@@ -62,7 +62,7 @@ impl QryptonVault {
     /// [`Error::InvalidPolicy`] on invalid input.
     pub fn __constructor(
         env: Env,
-        admin: Address,
+        operator: Address,
         pq_signers: Vec<PqPublicKey>,
         threshold: u32,
         policy: Policy,
@@ -81,7 +81,7 @@ impl QryptonVault {
 
     /// Executes a withdrawal approved by at least `threshold` PQ signers.
     ///
-    /// Requires `admin.require_auth()` (the classical Stellar signature).
+    /// Requires `operator.require_auth()` (the classical Stellar signature).
     ///
     /// Validation order — cheapest and most specific checks first, expensive
     /// signature verification last:
@@ -119,7 +119,7 @@ impl QryptonVault {
 
     /// Proposes replacing the PQ signer set and threshold.
     ///
-    /// Requires `admin.require_auth()` and `auth` approvals from the *current*
+    /// Requires `operator.require_auth()` and `auth` approvals from the *current*
     /// signer set at the *current* threshold over the
     /// `qrypton-vault/propose-key-rotation/v1` message. The proposal becomes
     /// executable only after a time lock, giving the institution a window to
@@ -144,7 +144,7 @@ impl QryptonVault {
 
     /// Cancels a pending rotation before it executes.
     ///
-    /// Requires `admin.require_auth()` and current-threshold approvals over the
+    /// Requires `operator.require_auth()` and current-threshold approvals over the
     /// `qrypton-vault/cancel-key-rotation/v1` message. Emits
     /// [`KeyRotationCancelled`].
     pub fn cancel_key_rotation(env: Env, auth: GovernanceAuth) -> Result<(), Error> {
@@ -153,7 +153,7 @@ impl QryptonVault {
 
     /// Replaces the withdrawal policy.
     ///
-    /// Requires `admin.require_auth()` and approvals from the current signer set
+    /// Requires `operator.require_auth()` and approvals from the current signer set
     /// at the current threshold over the `qrypton-vault/set-policy/v1` message,
     /// which commits to the hash of the new policy. Emits [`PolicyUpdated`].
     pub fn set_policy(env: Env, policy: Policy, auth: GovernanceAuth) -> Result<(), Error> {
@@ -164,8 +164,8 @@ impl QryptonVault {
     // Read-only views
     // ---------------------------------------------------------------------
 
-    /// The classical admin address.
-    pub fn admin(env: Env) -> Address {
+    /// The classical operator address.
+    pub fn operator(env: Env) -> Address {
         todo!()
     }
 

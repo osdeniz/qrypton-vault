@@ -64,18 +64,18 @@ In June 2026 the Stellar Development Foundation published a three-stage [Quantum
 
 **How Qrypton Vault fits.** Qrypton Vault does not compete with these building blocks; it is built on them. Stage 1 supplies a verification primitive, and Qrypton Vault turns it into something an institution can operate: a vault contract with a policy engine, an approver tool that works with HSMs, an integration SDK, and reference flows for anchors.
 
-As far as we know, no custody product institutions can use directly on Stellar yet combines PQ approvals with institutional controls. Qrypton Vault aims to be that product. When Stage 2 lands, the vault's classical `admin` account can itself carry a PQ signer, so both layers of authorization become post-quantum. By Stage 3, assets held in the vault are already behind ML-DSA.
+As far as we know, no custody product institutions can use directly on Stellar yet combines PQ approvals with institutional controls. Qrypton Vault aims to be that product. When Stage 2 lands, the vault's classical `operator` account can itself carry a PQ signer, so both layers of authorization become post-quantum. By Stage 3, assets held in the vault are already behind ML-DSA.
 
 ## What Qrypton Vault does
 
 | Component | Role |
 |---|---|
-| **Vault contract** (`contracts/vault`) | Holds assets on Soroban. Each withdrawal requires the admin's classical authorization **and** ML-DSA approvals from M of N registered signers over a canonical, domain-separated message. It checks expiry, single-use nonces and the policy before any transfer, and emits an audit event for every state change. |
+| **Vault contract** (`contracts/vault`) | Holds assets on Soroban. Each withdrawal requires the operator's classical authorization **and** ML-DSA approvals from M of N registered signers over a canonical, domain-separated message. It checks expiry, single-use nonces and the policy before any transfer, and emits an audit event for every state change. |
 | **Policy layer** | Per-token per-withdrawal and rolling-window limits, recipient allowlist, and time-locked signer-set rotation. Policy and signer changes themselves require PQ approval at the current threshold. |
 | **Signer** (`crates/qrypton-signer`) | Approver library and CLI. It decodes and displays the request, pre-checks it against the policy, signs with ML-DSA-65 (default) or ML-DSA-87, and outputs an approval. Key backends: software keystore for development, PKCS#11 HSM for production. |
 | **SDK** (`crates/qrypton-sdk`) | Builds requests, collects M-of-N approvals, submits through Stellar RPC and follows vault events. |
 
-**Flow in brief.** An operator builds a withdrawal request with the SDK. Approvers each review it in `qrypton-signer` and sign it on their HSM. Once M approvals are collected, the SDK submits the withdrawal with the admin's classical signature. The contract verifies everything and transfers the funds, and the institution's back office reconciles from the emitted events.
+**Flow in brief.** The treasury team builds a withdrawal request with the SDK. Approvers each review it in `qrypton-signer` and sign it on their HSM. Once M approvals are collected, the SDK submits the withdrawal with the operator's classical signature. The contract verifies everything and transfers the funds, and the institution's back office reconciles from the emitted events.
 
 The contract never implements ML-DSA; verification is delegated to the Soroban host behind a `PqVerifier` trait. The off-chain components do not implement ML-DSA either: in production, signing happens in HSM firmware; in development, it uses an established open-source Rust ML-DSA library that has not yet been independently audited.
 
@@ -106,7 +106,7 @@ A single withdrawal:
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Op as Operator (SDK)
+    participant Op as Treasury (SDK)
     participant A1 as Approver 1 (signer + HSM)
     participant A2 as Approver 2 (signer + HSM)
     participant V as Vault contract
@@ -123,7 +123,7 @@ sequenceDiagram
         A2->>A2: display → policy pre-check → sign
         A2-->>Op: PqApproval
     end
-    Op->>V: withdraw(request, approvals) + admin auth
+    Op->>V: withdraw(request, approvals) + operator auth
     V->>V: expiry → nonce → policy
     loop each approval
         V->>H: ML-DSA verify

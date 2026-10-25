@@ -8,7 +8,7 @@
 //!   its own HSM. Threshold: 2.
 //! * Policy: per-withdrawal and rolling-window limits for USDC; the hot wallet
 //!   is the only allowlisted recipient.
-//! * Classical authorization: the anchor's admin account.
+//! * Classical authorization: the anchor's operator account.
 //!
 //! Flow:
 //! 1. Treasury builds the withdrawal request with the SDK.
@@ -45,8 +45,8 @@ async fn main() {
 
     // 2. Collect 2-of-3 approvals from the treasury, compliance and risk approvers:
     //    qrypton_sdk::collect_approvals(&message, &approvers, THRESHOLD).await
-    // 3. Submit with the anchor admin as classical signer:
-    //    vault.submit_withdraw(&message.request, approvals, &admin).await
+    // 3. Submit with the anchor operator as classical signer:
+    //    vault.submit_withdraw(&message.request, approvals, &operator).await
     // 4. Watch for WithdrawExecuted / WithdrawRejected:
     //    vault.watch_events(EventCursor::Ledger(start)).await
     let _ = THRESHOLD;

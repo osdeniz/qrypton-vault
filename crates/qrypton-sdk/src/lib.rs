@@ -100,7 +100,7 @@ impl VaultClient {
     /// RPC, then waits for the transaction result.
     ///
     /// `source` signs the classical part: it must be (or be authorized by) the
-    /// vault's admin address. Approvals are passed through unchanged; the
+    /// vault's operator address. Approvals are passed through unchanged; the
     /// contract performs all verification.
     pub async fn submit_withdraw(
         &self,

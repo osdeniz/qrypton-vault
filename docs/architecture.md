@@ -8,7 +8,7 @@ This document describes Qrypton Vault at the level of components, trust boundari
 flowchart TB
     subgraph Off-chain["Off-chain (institution)"]
         direction TB
-        UI[Operator / back office]
+        UI[Treasury / back office]
         SDK[qrypton-sdk]
         SIG1[qrypton-signer #1]
         SIG2[qrypton-signer #2]
@@ -51,7 +51,7 @@ flowchart TB
 
 A withdrawal needs two independent authorizations:
 
-1. **Classical** — the vault's `admin` address authorizes the invocation (`require_auth`). The admin can be a Stellar multisig account or a contract account. Once Stage 2 of Stellar's Quantum Preparedness Plan adds PQ signers to classic accounts, this layer can itself become post-quantum.
+1. **Classical** — the vault's `operator` address authorizes the invocation (`require_auth`). The operator can be a Stellar multisig account or a contract account. Once Stage 2 of Stellar's Quantum Preparedness Plan adds PQ signers to classic accounts, this layer can itself become post-quantum.
 2. **Post-quantum** — at least `threshold` distinct signers from the vault's registered ML-DSA signer set approve the canonical message.
 
 Neither layer alone can move funds. Compromise of the classical key (including by a future CRQC) is not sufficient; compromise of fewer than `threshold` PQ keys is not sufficient.
@@ -80,7 +80,7 @@ Address fields are length-prefixed XDR. The contract rebuilds this message from 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Op as Operator
+    participant Op as Treasury
     participant SDK as qrypton-sdk
     participant S as qrypton-signer (×N)
     participant RPC as Stellar RPC
@@ -96,7 +96,7 @@ sequenceDiagram
     S-->>SDK: PqApproval (until M collected)
     SDK->>RPC: simulate + submit withdraw(request, approvals)
     RPC->>V: invoke
-    V->>V: admin.require_auth()
+    V->>V: operator.require_auth()
     V->>V: 1 expiry · 2 nonce · 3 policy
     alt rejected by 1–3
         V-->>RPC: WithdrawRejected event, outcome = Rejected

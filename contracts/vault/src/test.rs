@@ -19,7 +19,7 @@ fn deposit_transfers_and_emits_event() {
 
 #[test]
 #[ignore = "pre-alpha"]
-fn withdraw_requires_admin_auth() {
+fn withdraw_requires_operator_auth() {
     todo!()
 }
 
