@@ -17,7 +17,9 @@
 //! | Function                   | Operator | PQ quorum | Time lock |
 //! |----------------------------|:--------:|:---------:|:---------:|
 //! | `withdraw`                 | ✓        | ✓         |           |
-//! | `set_policy`               | ✓        | ✓         |           |
+//! | `set_policy` (tightening)  | ✓        | ✓         |           |
+//! | `set_policy` (loosening)   | ✓        | ✓         | ✓         |
+//! | `cancel_policy_change`     | ✓        | ✓         |           |
 //! | `propose_key_rotation`     | ✓        | ✓         | ✓         |
 //! | `cancel_key_rotation`      | ✓        | ✓         |           |
 //! | `propose_operator_change`  |          | ✓         | ✓         |
@@ -25,7 +27,8 @@
 //! | `execute_*`                | anyone, after the time lock      | |
 //!
 //! On top of that the vault enforces an institutional policy (per-token limits,
-//! recipient allowlist, rescue vault), single-use nonces and request expiry,
+//! recipient allowlist, rescue vault; changes that loosen it are time-locked),
+//! single-use nonces and request expiry,
 //! and emits an audit event for every state change.
 //!
 //! There is deliberately **no upgrade entry point**: the deployed code cannot
@@ -55,12 +58,13 @@ mod test;
 pub use error::Error;
 pub use events::{
     Deposited, KeyRotationCancelled, KeyRotationExecuted, KeyRotationProposed,
-    OperatorChangeCancelled, OperatorChangeExecuted, OperatorChangeProposed, PolicyUpdated,
-    WithdrawExecuted, WithdrawRejected,
+    OperatorChangeCancelled, OperatorChangeExecuted, OperatorChangeProposed, PolicyChangeCancelled,
+    PolicyChangeProposed, PolicyUpdated, WithdrawExecuted, WithdrawRejected,
 };
 pub use types::{
-    CancelCause, GovernanceAuth, PendingOperatorChange, PendingRotation, Policy, PqApproval,
-    PqPublicKey, PqSignature, RejectReason, TokenLimit, WithdrawOutcome, WithdrawRequest,
+    CancelCause, GovernanceAuth, PendingOperatorChange, PendingPolicyChange, PendingRotation,
+    Policy, PolicyChangeOutcome, PqApproval, PqPublicKey, PqSignature, RejectReason, TokenLimit,
+    WithdrawOutcome, WithdrawRequest,
 };
 
 use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
@@ -205,10 +209,11 @@ impl QryptonVault {
     /// rotation was already approved at proposal time. Emits
     /// [`KeyRotationExecuted`].
     ///
-    /// Executing a rotation **cancels any pending operator change** (emitting
-    /// [`OperatorChangeCancelled`] with [`CancelCause::KeyRotation`]): that
-    /// proposal was approved by keys that may just have been removed, and must
-    /// not be executable afterwards.
+    /// Executing a rotation **cancels any pending operator change and any
+    /// pending policy change** (emitting [`OperatorChangeCancelled`] /
+    /// [`PolicyChangeCancelled`] with [`CancelCause::KeyRotation`]): those
+    /// proposals were approved by keys that may just have been removed, and
+    /// must not be executable afterwards.
     pub fn execute_key_rotation(env: Env) -> Result<(), Error> {
         todo!()
     }
@@ -223,7 +228,7 @@ impl QryptonVault {
     }
 
     // ---------------------------------------------------------------------
-    // Policy (operator + PQ quorum)
+    // Policy (operator + PQ quorum; loosening is time-locked)
     // ---------------------------------------------------------------------
 
     /// Replaces the withdrawal policy.
@@ -232,8 +237,49 @@ impl QryptonVault {
     /// over the `qrypton-vault/set-policy/v1` message, which commits to the
     /// hash of the new policy. Requiring the operator here means a stolen
     /// quorum cannot remove the rescue vault or change limits during an
-    /// operator-change time lock. Emits [`PolicyUpdated`].
-    pub fn set_policy(env: Env, policy: Policy, auth: GovernanceAuth) -> Result<(), Error> {
+    /// operator-change time lock.
+    ///
+    /// The new policy is compared with the current one:
+    ///
+    /// * **Tightening only** — every change lowers a limit, removes a token or
+    ///   removes an allowlist entry (but does not empty the allowlist, which
+    ///   would disable it), and the rescue vault is unchanged. Applied
+    ///   immediately; emits [`PolicyUpdated`] and returns
+    ///   [`PolicyChangeOutcome::Applied`].
+    /// * **Anything else is loosening** — raising a limit, adding a token or
+    ///   allowlist entry, emptying the allowlist, or setting, changing or
+    ///   removing the rescue vault. Scheduled behind a time lock; emits
+    ///   [`PolicyChangeProposed`] and returns [`PolicyChangeOutcome::Scheduled`].
+    ///   At most one policy change can be pending
+    ///   ([`Error::PolicyChangeAlreadyPending`]).
+    ///
+    /// Without this, an attacker holding both the operator and the quorum could
+    /// raise a limit or allowlist their own address and withdraw in the same
+    /// minute; with it, loosening is publicly visible before it takes effect.
+    pub fn set_policy(
+        env: Env,
+        policy: Policy,
+        auth: GovernanceAuth,
+    ) -> Result<PolicyChangeOutcome, Error> {
+        todo!()
+    }
+
+    /// Applies the pending (loosening) policy change once its time lock has
+    /// elapsed.
+    ///
+    /// Permissionless: the change was approved at proposal time. Emits
+    /// [`PolicyUpdated`].
+    pub fn execute_policy_change(env: Env) -> Result<(), Error> {
+        todo!()
+    }
+
+    /// Cancels the pending policy change.
+    ///
+    /// Requires `operator.require_auth()` and current-threshold PQ approvals
+    /// over the `qrypton-vault/cancel-policy-change/v1` message, which commits
+    /// to the hash of the pending proposal. Emits [`PolicyChangeCancelled`]
+    /// with [`CancelCause::Quorum`].
+    pub fn cancel_policy_change(env: Env, auth: GovernanceAuth) -> Result<(), Error> {
         todo!()
     }
 
@@ -263,6 +309,11 @@ impl QryptonVault {
 
     /// The pending operator change, if any.
     pub fn pending_operator_change(env: Env) -> Option<PendingOperatorChange> {
+        todo!()
+    }
+
+    /// The pending (loosening) policy change, if any.
+    pub fn pending_policy_change(env: Env) -> Option<PendingPolicyChange> {
         todo!()
     }
 

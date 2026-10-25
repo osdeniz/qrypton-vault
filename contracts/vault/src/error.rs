@@ -35,4 +35,10 @@ pub enum Error {
     OperatorChangeAlreadyPending = 14,
     /// The operator-change time lock has not elapsed yet.
     OperatorChangeTimelocked = 15,
+    /// No policy change is pending.
+    NoPendingPolicyChange = 16,
+    /// A policy change is already pending.
+    PolicyChangeAlreadyPending = 17,
+    /// The policy-change time lock has not elapsed yet.
+    PolicyChangeTimelocked = 18,
 }

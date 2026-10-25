@@ -60,6 +60,14 @@ pub enum VaultEvent {
         new_operator: String,
         cause: String,
     },
+    PolicyChangeProposed {
+        policy_hash: [u8; 32],
+        executable_at: u64,
+    },
+    PolicyChangeCancelled {
+        policy_hash: [u8; 32],
+        cause: String,
+    },
 }
 
 /// A live subscription to vault events.

@@ -47,7 +47,8 @@ pub struct WithdrawRequest {
 /// `approvals` are ML-DSA signatures over the canonical governance message
 /// for the action, which binds the action's own domain tag
 /// (`qrypton-vault/set-operator/v1`, `.../rotate-keys/v1`, `.../set-policy/v1`,
-/// `.../cancel-operator-change/v1`, `.../cancel-key-rotation/v1`), the network
+/// `.../cancel-operator-change/v1`, `.../cancel-key-rotation/v1`,
+/// `.../cancel-policy-change/v1`), the network
 /// id, this vault's address, the action payload, `nonce` and `expires_at`
 /// (see `qrypton_types::message`). The nonce space is shared with withdrawals.
 #[contracttype]
@@ -106,7 +107,7 @@ pub struct PendingOperatorChange {
     pub executable_at: u64,
 }
 
-/// Why a pending operator change was cancelled.
+/// Why a pending proposal (operator or policy change) was cancelled.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u32)]
@@ -115,6 +116,25 @@ pub enum CancelCause {
     Quorum = 1,
     /// Invalidated because a signer-set rotation executed.
     KeyRotation = 2,
+}
+
+/// A loosening policy change awaiting its time lock.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingPolicyChange {
+    pub policy: Policy,
+    /// Ledger timestamp from which `execute_policy_change` succeeds.
+    pub executable_at: u64,
+}
+
+/// Result of `set_policy`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PolicyChangeOutcome {
+    /// Tightening change, applied immediately.
+    Applied,
+    /// Loosening change, executable from the given ledger timestamp.
+    Scheduled(u64),
 }
 
 /// Why a withdrawal was rejected without failing the invocation.

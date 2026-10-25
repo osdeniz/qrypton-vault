@@ -48,6 +48,7 @@
 //! | set policy              | `qrypton-vault/set-policy/v1`               | 32 bytes, SHA-256 of the XDR-encoded policy    |
 //! | cancel operator change  | `qrypton-vault/cancel-operator-change/v1`   | 32 bytes, hash of the pending proposal         |
 //! | cancel key rotation     | `qrypton-vault/cancel-key-rotation/v1`      | 32 bytes, hash of the pending proposal         |
+//! | cancel policy change    | `qrypton-vault/cancel-policy-change/v1`     | 32 bytes, hash of the pending proposal         |
 //!
 //! Cancellations commit to the hash of the specific pending proposal, so an
 //! approval to cancel one proposal cannot cancel a later one.
@@ -87,6 +88,8 @@ pub enum DomainTag {
     CancelOperatorChangeV1,
     /// Approval of cancelling a pending signer-set rotation.
     CancelKeyRotationV1,
+    /// Approval of cancelling a pending (loosening) policy change.
+    CancelPolicyChangeV1,
 }
 
 impl DomainTag {
@@ -99,6 +102,7 @@ impl DomainTag {
             DomainTag::SetPolicyV1 => b"qrypton-vault/set-policy/v1",
             DomainTag::CancelOperatorChangeV1 => b"qrypton-vault/cancel-operator-change/v1",
             DomainTag::CancelKeyRotationV1 => b"qrypton-vault/cancel-key-rotation/v1",
+            DomainTag::CancelPolicyChangeV1 => b"qrypton-vault/cancel-policy-change/v1",
         }
     }
 }

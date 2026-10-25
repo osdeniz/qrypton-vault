@@ -23,6 +23,8 @@ pub enum GovernanceAction {
     CancelOperatorChange { proposal_hash: [u8; 32] },
     /// Cancel the pending key rotation identified by its proposal hash.
     CancelKeyRotation { proposal_hash: [u8; 32] },
+    /// Cancel the pending policy change identified by its proposal hash.
+    CancelPolicyChange { proposal_hash: [u8; 32] },
 }
 
 impl GovernanceAction {
@@ -34,6 +36,7 @@ impl GovernanceAction {
             GovernanceAction::SetPolicy { .. } => DomainTag::SetPolicyV1,
             GovernanceAction::CancelOperatorChange { .. } => DomainTag::CancelOperatorChangeV1,
             GovernanceAction::CancelKeyRotation { .. } => DomainTag::CancelKeyRotationV1,
+            GovernanceAction::CancelPolicyChange { .. } => DomainTag::CancelPolicyChangeV1,
         }
     }
 }

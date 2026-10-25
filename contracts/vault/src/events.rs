@@ -68,7 +68,8 @@ pub struct KeyRotationCancelled {
     pub signers_hash: BytesN<32>,
 }
 
-/// The withdrawal policy was replaced.
+/// The withdrawal policy was replaced (immediately for tightening changes, or
+/// when a time-locked loosening change executes).
 #[contractevent]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PolicyUpdated {
@@ -100,5 +101,22 @@ pub struct OperatorChangeExecuted {
 pub struct OperatorChangeCancelled {
     #[topic]
     pub new_operator: Address,
+    pub cause: CancelCause,
+}
+
+/// A loosening policy change was proposed and is time-locked.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PolicyChangeProposed {
+    /// SHA-256 over the XDR encoding of the proposed policy.
+    pub policy_hash: BytesN<32>,
+    pub executable_at: u64,
+}
+
+/// The pending policy change was cancelled.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PolicyChangeCancelled {
+    pub policy_hash: BytesN<32>,
     pub cause: CancelCause,
 }

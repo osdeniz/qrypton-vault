@@ -115,6 +115,24 @@ fn governance_approval_is_bound_to_vault_network_and_action() {
 
 #[test]
 #[ignore = "pre-alpha"]
+fn tightening_policy_change_applies_immediately() {
+    todo!()
+}
+
+#[test]
+#[ignore = "pre-alpha"]
+fn loosening_policy_change_is_timelocked() {
+    todo!("raise limit, add token, add allowlist entry, empty allowlist, change rescue vault")
+}
+
+#[test]
+#[ignore = "pre-alpha"]
+fn executing_key_rotation_cancels_pending_policy_change() {
+    todo!()
+}
+
+#[test]
+#[ignore = "pre-alpha"]
 fn set_policy_requires_operator_and_current_threshold() {
     todo!()
 }
