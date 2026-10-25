@@ -31,6 +31,9 @@
 //! single-use nonces and request expiry,
 //! and emits an audit event for every state change.
 //!
+//! Key rotation, operator change and loosening policy changes share one
+//! propose → wait → execute / cancel mechanism (`timelock` module).
+//!
 //! There is deliberately **no upgrade entry point**: the deployed code cannot
 //! be replaced. Migration to a new version means withdrawing to a new vault
 //! under the normal authorization rules.
@@ -49,6 +52,7 @@
 
 mod error;
 mod events;
+mod timelock;
 mod types;
 pub mod verifier;
 

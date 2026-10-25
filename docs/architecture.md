@@ -148,7 +148,7 @@ Validation is ordered from cheapest to most expensive so that requests failing s
 
 ## Time-locked governance
 
-Signer-set rotation, operator change and loosening policy changes follow the same pattern: **propose → wait → execute**. At most one of each can be pending. Execution is permissionless once the time lock has passed, because the change was already approved when it was proposed.
+Signer-set rotation, operator change and loosening policy changes follow the same pattern: **propose → wait → execute**, or **cancel**. In the contract this is one shared module (`contracts/vault/src/timelock.rs`) used by all three, not three separate implementations. At most one of each can be pending. Execution is permissionless once the time lock has passed, because the change was already approved when it was proposed.
 
 ```mermaid
 stateDiagram-v2
