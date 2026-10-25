@@ -139,6 +139,30 @@ fn executing_key_rotation_cancels_pending_policy_change() {
 
 #[test]
 #[ignore = "pre-alpha"]
+fn withdraw_rejects_quorum_without_operator() {
+    todo!()
+}
+
+#[test]
+#[ignore = "pre-alpha"]
+fn withdraw_rejects_operator_without_quorum() {
+    todo!()
+}
+
+#[test]
+#[ignore = "pre-alpha"]
+fn loosening_cannot_execute_before_timelock() {
+    todo!()
+}
+
+#[test]
+#[ignore = "pre-alpha"]
+fn stale_cancel_approval_cannot_cancel_newer_proposal() {
+    todo!()
+}
+
+#[test]
+#[ignore = "pre-alpha"]
 fn set_policy_requires_operator_and_current_threshold() {
     todo!()
 }
