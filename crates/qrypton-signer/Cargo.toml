@@ -1,0 +1,21 @@
+[package]
+name = "qrypton-signer"
+description = "Qrypton Vault approver: ML-DSA key backends (software keystore, PKCS#11 HSM) and approval CLI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "qrypton-signer"
+path = "src/bin/qrypton-signer.rs"
+
+[dependencies]
+qrypton-types = { workspace = true, features = ["std"] }
+clap = { workspace = true }
+thiserror = { workspace = true }
