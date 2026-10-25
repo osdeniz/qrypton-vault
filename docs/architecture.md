@@ -57,14 +57,25 @@ flowchart TB
 | Action | Operator | PQ quorum | Time lock | Domain tag |
 |---|:-:|:-:|:-:|---|
 | `withdraw` | ✓ | ✓ | | `withdraw/v1` |
-| `set_policy` | ✓ | ✓ | | `set-policy/v1` |
+| `set_policy` — tightening | ✓ | ✓ | | `set-policy/v1` |
+| `set_policy` — loosening | ✓ | ✓ | ✓ | `set-policy/v1` |
+| `cancel_policy_change` | ✓ | ✓ | | `cancel-policy-change/v1` |
 | `propose_key_rotation` | ✓ | ✓ | ✓ | `rotate-keys/v1` |
 | `cancel_key_rotation` | ✓ | ✓ | | `cancel-key-rotation/v1` |
 | `propose_operator_change` | | ✓ | ✓ | `set-operator/v1` |
 | `cancel_operator_change` | | ✓ | | `cancel-operator-change/v1` |
-| `execute_key_rotation`, `execute_operator_change` | anyone, after the time lock | | | |
+| `execute_key_rotation`, `execute_operator_change`, `execute_policy_change` | anyone, after the time lock | | | |
 
 `set_policy` deliberately requires the operator: an attacker holding only the quorum cannot remove the rescue vault or change limits while an operator change is pending.
+
+### Policy changes: loosening is time-locked
+
+If withdrawals and policy changes needed exactly the same authority with no delay, limits would mean little: whoever held both the operator and the quorum could raise a limit and withdraw in the same minute. The contract therefore compares the new policy with the current one:
+
+- **Tightening** — lowering a limit, removing a token, removing an allowlist entry (without emptying the allowlist, which would disable it) — applies immediately.
+- **Loosening** — anything else: raising a limit, adding a token or an allowlist entry, emptying the allowlist, setting, changing or removing the rescue vault — is proposed, waits out a public time lock, and is then executed. At most one policy change can be pending.
+
+In the first phase the per-withdrawal limit alone does not bound the total an attacker with both factors can move (withdrawals can be repeated); what bounds it is the allowlist together with time-locked loosening: funds can only go to already-allowlisted addresses or the rescue vault. The rolling-window limit in the next phase adds an amount bound.
 
 ### Rescue vault
 
@@ -133,7 +144,7 @@ Validation is ordered from cheapest to most expensive so that requests failing s
 
 ## Time-locked governance
 
-Signer-set rotation and operator change follow the same pattern: **propose → wait → execute**. At most one of each can be pending. Execution is permissionless once the time lock has passed, because the change was already approved when it was proposed.
+Signer-set rotation, operator change and loosening policy changes follow the same pattern: **propose → wait → execute**. At most one of each can be pending. Execution is permissionless once the time lock has passed, because the change was already approved when it was proposed.
 
 ```mermaid
 stateDiagram-v2
@@ -144,6 +155,13 @@ stateDiagram-v2
         PendingOp --> NoPendingOp: execute_operator_change (anyone, after time lock)
         PendingOp --> NoPendingOp: execute_key_rotation (cancels it)
     }
+    state "Policy change (loosening)" as PC {
+        [*] --> NoPendingPol
+        NoPendingPol --> PendingPol: set_policy, loosening (operator + quorum)
+        PendingPol --> NoPendingPol: cancel_policy_change (operator + quorum)
+        PendingPol --> NoPendingPol: execute_policy_change (anyone, after time lock)
+        PendingPol --> NoPendingPol: execute_key_rotation (cancels it)
+    }
     state "Key rotation" as KR {
         [*] --> NoPendingRot
         NoPendingRot --> PendingRot: propose_key_rotation (operator + quorum)
@@ -152,7 +170,7 @@ stateDiagram-v2
     }
 ```
 
-Executing a key rotation cancels any pending operator change. That proposal was approved by the old signer set, and keys removed by the rotation must not be able to complete a change afterwards.
+Executing a key rotation cancels any pending operator change and any pending policy change. Those proposals were approved by the old signer set, and keys removed by the rotation must not be able to complete a change afterwards.
 
 The time-lock durations are deployment parameters.
 
@@ -174,6 +192,7 @@ ML-DSA-65 is the default parameter set; ML-DSA-87 is supported for NIST category
 | `WithdrawRejected` | A withdrawal is refused by expiry, nonce or policy |
 | `KeyRotationProposed` / `KeyRotationExecuted` / `KeyRotationCancelled` | Signer-set governance |
 | `OperatorChangeProposed` / `OperatorChangeExecuted` / `OperatorChangeCancelled` | Operator governance (cancellation records whether the quorum or a key rotation caused it) |
-| `PolicyUpdated` | Policy replaced (carries the policy hash) |
+| `PolicyUpdated` | Policy replaced (carries the policy hash) — immediately for tightening, on execution for loosening |
+| `PolicyChangeProposed` / `PolicyChangeCancelled` | A loosening policy change was scheduled / cancelled |
 
 Events are designed so the vault's state can be reconciled from the event stream alone.

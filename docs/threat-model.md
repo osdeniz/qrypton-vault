@@ -36,13 +36,14 @@ A short overview. A full threat model is part of milestone M4 together with the 
 - **Pre-allowlisted rescue vault:** withdrawals to it skip amount limits and the allowlist, so a copied quorum is answered by moving funds out within the time lock. The rescue vault is controlled by a separate quorum and operator, preferably on a separate HSM, so the keys an attacker copied do not reach it. Policy changes need the operator, so a quorum-only attacker cannot remove the rescue vault.
 - Canonical, domain-separated messages bound to network, vault, action, nonce and expiry; one nonce space for all actions; cancellations bound to a specific proposal.
 - Approvers decode and display the exact bytes they sign; they never sign opaque blobs.
-- Policy limits and allowlist bound the damage of a compromised quorum plus operator.
+- **Loosening policy changes are time-locked** (higher limits, new tokens or recipients, emptying the allowlist, changing the rescue vault); tightening applies immediately. An attacker holding both the operator and the quorum therefore cannot raise a limit or allowlist their own address and withdraw in the same minute.
 - **No upgrade entry point in the current phase:** deployed code cannot be replaced. Migration and incident response use the same path: withdraw to a new (rescue) vault.
 - No custom cryptography: ML-DSA verification by the Soroban host, signing by HSM firmware in production (in development, an established open-source Rust ML-DSA library that has not yet been independently audited).
 
 ## Residual risks
 
 - A stolen quorum whose theft goes unnoticed for the whole time lock can replace the operator and then control the vault. Monitoring of `OperatorChangeProposed` events is therefore part of operating the vault.
+- An attacker holding **both** the operator and the quorum can still withdraw immediately to already-allowlisted addresses and to the rescue vault. In the first phase the per-withdrawal limit can be repeated, so the allowlist (plus time-locked loosening) is what bounds this case; with the allowlist disabled it is not bounded. The rolling-window limit (next phase) adds an amount bound.
 - If the institution has lost (not just leaked) its quorum, the rescue path is unavailable.
 - If the rescue vault shares keys or HSMs with the main vault, the rescue path offers no protection against key copying; separation is an operational requirement.
 - A quorum-only attacker can re-submit a cancelled operator change indefinitely, so cancelling alone never ends the incident (see below).
@@ -56,7 +57,7 @@ The correct response is therefore not to race the attacker with cancellations or
 ## Out of scope
 
 - Breaks of ML-DSA itself or of the Soroban host implementation.
-- Simultaneous compromise of the PQ quorum and the operator.
+- Simultaneous compromise of the PQ quorum and the operator, beyond what the allowlist and time-locked loosening bound (see residual risks).
 - Security of the underlying token contracts and of the Stellar consensus protocol.
 - Physical security and operational procedures of the institution's HSMs.
 - Side channels in third-party HSM firmware.

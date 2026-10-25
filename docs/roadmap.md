@@ -22,9 +22,9 @@ M1 depends on Protocol 30 reaching testnet (validator vote scheduled for 3 Novem
 - `qrypton-signer` CLI: `keygen`, `show-pubkey`, `approve-withdraw`.
 - `SoftwareKeystore` backend (encrypted at rest; development and testnet only), using an established open-source Rust ML-DSA library (not yet independently audited; production signing moves to the HSM in M4).
 - Approval flow: decode and display → policy pre-check → sign → approval.
-- Governance flows: `set_policy`; time-locked key rotation (`propose_key_rotation`, `execute_key_rotation`, `cancel_key_rotation`); time-locked, quorum-only operator change (`propose_operator_change`, `execute_operator_change`, `cancel_operator_change`).
+- Governance flows: `set_policy` (tightening immediate; loosening time-locked via `execute_policy_change` / `cancel_policy_change`); time-locked key rotation (`propose_key_rotation`, `execute_key_rotation`, `cancel_key_rotation`); time-locked, quorum-only operator change (`propose_operator_change`, `execute_operator_change`, `cancel_operator_change`).
 
-**Done when:** a 2-of-3 testnet withdrawal succeeds with three independent approvers, and tests cover duplicate signers, wrong network, wrong vault, expired request, reused nonce, algorithm mismatch and policy violations, and the governance rules: operator change needs only the quorum and cannot be cancelled by the operator alone, at most one operator change is pending, executing a key rotation cancels a pending operator change, and rescue-vault withdrawals skip limits.
+**Done when:** a 2-of-3 testnet withdrawal succeeds with three independent approvers, and tests cover duplicate signers, wrong network, wrong vault, expired request, reused nonce, algorithm mismatch and policy violations, and the governance rules: operator change needs only the quorum and cannot be cancelled by the operator alone, at most one operator change is pending, executing a key rotation cancels a pending operator or policy change, loosening policy changes are time-locked while tightening applies immediately, and rescue-vault withdrawals skip limits.
 
 ## M3 — SDK and anchor demo
 
