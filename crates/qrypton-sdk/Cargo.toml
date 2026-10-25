@@ -1,0 +1,13 @@
+[package]
+name = "qrypton-sdk"
+description = "Rust SDK for institutions integrating Qrypton Vault."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+qrypton-types = { workspace = true, features = ["std"] }
+thiserror = { workspace = true }
