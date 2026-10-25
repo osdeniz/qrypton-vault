@@ -1,6 +1,6 @@
 # Qrypton Vault — Post-Quantum Institutional Custody on Stellar
 
-**Qrypton Vault is a Soroban custody vault for anchors and institutions in which no withdrawal executes without ML-DSA (NIST FIPS 204) post-quantum approvals alongside the classical Stellar signature, wrapped in an institutional policy layer: M-of-N approval, withdrawal limits, recipient allowlists, time-locked key rotation and audit events.**
+**Qrypton Vault is a Soroban custody vault for anchors and institutions in which no withdrawal executes without ML-DSA (NIST FIPS 204) post-quantum approvals alongside the classical Stellar signature, wrapped in an institutional policy layer: M-of-N approval, withdrawal limits, recipient allowlists, a pre-allowlisted rescue vault, time-locked key and operator rotation, and audit events.**
 
 Why now:
 
@@ -64,18 +64,27 @@ In June 2026 the Stellar Development Foundation published a three-stage [Quantum
 
 **How Qrypton Vault fits.** Qrypton Vault does not compete with these building blocks; it is built on them. Stage 1 supplies a verification primitive, and Qrypton Vault turns it into something an institution can operate: a vault contract with a policy engine, an approver tool that works with HSMs, an integration SDK, and reference flows for anchors.
 
-As far as we know, no custody product institutions can use directly on Stellar yet combines PQ approvals with institutional controls. Qrypton Vault aims to be that product. When Stage 2 lands, the vault's classical `operator` account can itself carry a PQ signer, so both layers of authorization become post-quantum. By Stage 3, assets held in the vault are already behind ML-DSA.
+As far as we know, no custody product institutions can use directly on Stellar yet combines PQ approvals with institutional controls. Qrypton Vault aims to be that product. When Stage 2 lands, the vault's classical `operator` account can itself carry a PQ signer, so the second factor becomes post-quantum as well. By Stage 3, assets held in the vault are already behind ML-DSA.
 
 ## What Qrypton Vault does
 
 | Component | Role |
 |---|---|
 | **Vault contract** (`contracts/vault`) | Holds assets on Soroban. Each withdrawal requires the operator's classical authorization **and** ML-DSA approvals from M of N registered signers over a canonical, domain-separated message. It checks expiry, single-use nonces and the policy before any transfer, and emits an audit event for every state change. |
-| **Policy layer** | Per-token per-withdrawal and rolling-window limits, recipient allowlist, and time-locked signer-set rotation. Policy and signer changes themselves require PQ approval at the current threshold. |
+| **Policy layer** | Per-token per-withdrawal limits, recipient allowlist, a pre-allowlisted rescue vault, and time-locked signer-set rotation and operator change. A rolling-window (e.g. daily) limit is planned for the next phase. Policy changes require both the operator and the PQ quorum. |
 | **Signer** (`crates/qrypton-signer`) | Approver library and CLI. It decodes and displays the request, pre-checks it against the policy, signs with ML-DSA-65 (default) or ML-DSA-87, and outputs an approval. Key backends: software keystore for development, PKCS#11 HSM for production. |
 | **SDK** (`crates/qrypton-sdk`) | Builds requests, collects M-of-N approvals, submits through Stellar RPC and follows vault events. |
 
 **Flow in brief.** The treasury team builds a withdrawal request with the SDK. Approvers each review it in `qrypton-signer` and sign it on their HSM. Once M approvals are collected, the SDK submits the withdrawal with the operator's classical signature. The contract verifies everything and transfers the funds, and the institution's back office reconciles from the emitted events.
+
+### Authority model
+
+- **The PQ quorum is the root of authority.** At least M of the N registered ML-DSA signers must approve every withdrawal and every governance action.
+- **The operator is a second factor for day-to-day withdrawals.** It is a classical Stellar account (which can be a multisig account) that must co-authorize withdrawals, policy changes and key rotations.
+- **A stolen operator key cannot move anything.** Without the quorum it can neither withdraw nor change settings, and it cannot block recovery.
+- **A stolen quorum can replace the operator only after a public waiting period.** Changing the operator needs **only** the M-of-N ML-DSA quorum, never the operator's own signature, so a lost or compromised classical key cannot lock the vault. The change is proposed, waits out a time lock visible to everyone on-chain, and is then executed; only the quorum can cancel it.
+
+**Pre-allowlisted rescue vault.** The time lock on its own only buys time to notice an attack; it does not stop an attacker who holds the quorum. Its real value comes with the rescue vault. When keys have been copied rather than lost, the institution still holds both the operator key and the quorum. During the waiting period it can move all funds to a rescue vault that was configured in the policy in advance. Withdrawals to the rescue vault skip amount limits and the allowlist, but still need the operator and the quorum. Because policy changes need the operator, an attacker holding only the quorum cannot remove the rescue vault. The same path replaces upgrades: the contract has **no upgrade entry point**, and migrating to a new version means withdrawing to a new vault under the normal rules.
 
 The contract never implements ML-DSA; verification is delegated to the Soroban host behind a `PqVerifier` trait. The off-chain components do not implement ML-DSA either: in production, signing happens in HSM firmware; in development, it uses an established open-source Rust ML-DSA library that has not yet been independently audited.
 
