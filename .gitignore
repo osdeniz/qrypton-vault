@@ -1,0 +1,25 @@
+# Build output
+/target/
+**/target/
+*.wasm
+!/contracts/**/fixtures/*.wasm
+
+# Secrets and local configuration — never commit these
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+keystore/
+secrets/
+.stellar/
+.soroban/
+test_snapshots/
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store

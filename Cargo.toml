@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "contracts/vault",
+    "crates/qrypton-types",
+    "crates/qrypton-signer",
+    "crates/qrypton-sdk",
+    "examples/anchor-reserve-withdrawal",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.91"
+publish = false
+repository = "https://github.com/osdeniz/qrypton-vault"
+authors = ["Ömer Salih Deniz"]
+
+[workspace.dependencies]
+# Pinned to the latest stable soroban-sdk release at the time of writing.
+# ML-DSA host functions first appear in the 30.x release line (see
+# contracts/vault/src/verifier.rs); the pin moves once 30.0.0 is stable.
+soroban-sdk = { version = "=29.0.1" }
+
+qrypton-types = { path = "crates/qrypton-types", default-features = false }
+qrypton-signer = { path = "crates/qrypton-signer" }
+qrypton-sdk = { path = "crates/qrypton-sdk" }
+
+clap = { version = "4.6", features = ["derive"] }
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+# Soroban contracts are built with this profile (`stellar contract build`).
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
