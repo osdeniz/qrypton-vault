@@ -2,7 +2,7 @@
 
 Each milestone ends in a public, verifiable deliverable in this repository.
 
-The first 30-day phase covers M1 and M2 plus the core policy layer (per-withdrawal limit, allowlist, time-locked rotation); M3 and M4 follow.
+The first 30-day phase covers M1 and M2 plus the core policy layer (per-withdrawal limit, default-closed allowlist, pre-configured rescue vault, and the shared time lock for key rotation, operator change and policy loosening); M3 and M4 follow.
 
 ## Dependency
 
@@ -11,7 +11,7 @@ M1 depends on Protocol 30 reaching testnet (validator vote scheduled for 3 Novem
 ## M1 — Vault contract and native ML-DSA verification
 
 - Implement the vault contract: constructor, deposit, withdraw (expiry → nonce → policy → M-of-N → transfer → event), views.
-- Core policy layer: per-token per-withdrawal limit, recipient allowlist, pre-allowlisted rescue vault.
+- Core policy layer: per-token per-withdrawal limit, recipient allowlist (closed by default), pre-configured rescue vault.
 - Implement `NativeHostVerifier` on the CAP-0087 host functions.
 - Implement the canonical message encoder on-chain and off-chain, with shared test vectors.
 
@@ -24,7 +24,7 @@ M1 depends on Protocol 30 reaching testnet (validator vote scheduled for 3 Novem
 - Approval flow: decode and display → policy pre-check → sign → approval.
 - Governance flows: `set_policy` (tightening immediate; loosening time-locked via `execute_policy_change` / `cancel_policy_change`); time-locked key rotation (`propose_key_rotation`, `execute_key_rotation`, `cancel_key_rotation`); time-locked, quorum-only operator change (`propose_operator_change`, `execute_operator_change`, `cancel_operator_change`).
 
-**Done when:** a 2-of-3 testnet withdrawal succeeds with three independent approvers, and tests cover duplicate signers, wrong network, wrong vault, expired request, reused nonce, algorithm mismatch and policy violations, and the governance rules: operator change needs only the quorum and cannot be cancelled by the operator alone, at most one operator change is pending, executing a key rotation cancels a pending operator or policy change, loosening policy changes are time-locked while tightening applies immediately, and rescue-vault withdrawals skip limits.
+**Done when:** a 2-of-3 testnet withdrawal succeeds with three independent approvers, and tests cover duplicate signers, wrong network, wrong vault, expired request, reused nonce, algorithm mismatch, policy violations, quorum approval without the operator, operator authorization without the quorum, loosening executed before its time lock, a stale cancel approval used against a newer proposal, and the governance rules: operator change needs only the quorum and cannot be cancelled by the operator alone, at most one operator change is pending, executing a key rotation cancels a pending operator or policy change, loosening policy changes are time-locked while tightening applies immediately, and rescue-vault withdrawals skip limits.
 
 ## M3 — SDK and anchor demo
 

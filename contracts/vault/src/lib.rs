@@ -12,7 +12,7 @@
 //! * A stolen operator key alone cannot move funds or change anything.
 //! * A stolen quorum alone can only replace the operator, and only after a
 //!   public time lock during which the institution can cancel the change or
-//!   move funds to a pre-allowlisted rescue vault.
+//!   move funds to a pre-configured rescue vault.
 //!
 //! | Function                   | Operator | PQ quorum | Time lock |
 //! |----------------------------|:--------:|:---------:|:---------:|

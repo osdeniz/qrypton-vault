@@ -85,7 +85,7 @@ pub struct Policy {
     /// Explicit switch that lifts the allowlist and permits any recipient.
     /// Off by default; turning it on counts as loosening (time-locked).
     pub open_recipients: bool,
-    /// Pre-allowlisted rescue vault (typically another Qrypton Vault controlled
+    /// Pre-configured rescue vault (typically another Qrypton Vault controlled
     /// by the same institution, with its own, separate signer set and operator,
     /// preferably on a separate HSM). Withdrawals to it still need the operator and
     /// the PQ quorum, but skip amount limits and the allowlist, so all funds

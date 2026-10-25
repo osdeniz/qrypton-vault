@@ -32,7 +32,7 @@ pub struct Policy {
     pub allowlist: Vec<AddressBytes>,
     /// Lifts the allowlist and permits any recipient. Off by default.
     pub open_recipients: bool,
-    /// Pre-allowlisted rescue vault; withdrawals to it skip amount limits and
+    /// Pre-configured rescue vault; withdrawals to it skip amount limits and
     /// the allowlist (operator and PQ quorum are still required).
     pub rescue_vault: Option<AddressBytes>,
 }

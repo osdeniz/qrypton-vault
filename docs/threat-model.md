@@ -15,7 +15,7 @@ A short overview. A full threat model is part of milestone M4 together with the 
 - The **PQ quorum** (M of N ML-DSA signers) is the root of authority.
 - The **operator** (classical Stellar account) is a second factor for withdrawals, policy changes and key rotations.
 - A **stolen operator key** alone cannot move funds, change settings or block recovery.
-- A **stolen quorum** alone can only replace the operator, and only after a public time lock. During that window the institution can cancel the change and move funds to the pre-allowlisted rescue vault.
+- A **stolen quorum** alone can only replace the operator, and only after a public time lock. During that window the institution can cancel the change and move funds to the pre-configured rescue vault.
 
 ## Adversaries
 
@@ -33,7 +33,7 @@ A short overview. A full threat model is part of milestone M4 together with the 
 - PQ quorum required for every outflow and every governance action; a CRQC that breaks the operator key still lacks PQ approvals.
 - Operator change needs only the quorum, so a lost or broken classical key cannot lock the vault; the operator cannot cancel it alone, so a stolen operator key cannot block recovery.
 - Operator change and key rotation are time-locked and publicly visible; at most one operator change can be pending; executing a key rotation cancels any pending operator change.
-- **Pre-allowlisted rescue vault:** withdrawals to it skip amount limits and the allowlist, so a copied quorum is answered by moving funds out within the time lock. The rescue vault is controlled by a separate quorum and operator, preferably on a separate HSM, so the keys an attacker copied do not reach it. Policy changes need the operator, so a quorum-only attacker cannot remove the rescue vault.
+- **Pre-configured rescue vault:** withdrawals to it skip amount limits and the allowlist, so a copied quorum is answered by moving funds out within the time lock. The rescue vault is controlled by a separate quorum and operator, preferably on a separate HSM, so the keys an attacker copied do not reach it. Policy changes need the operator, so a quorum-only attacker cannot remove the rescue vault.
 - **Allowlist closed by default:** an empty allowlist admits no recipient (only the rescue vault); opening the vault to arbitrary recipients is an explicit, time-locked `open_recipients` switch, so removing the last address locks the vault rather than opening it.
 - Canonical, domain-separated messages bound to network, vault, action, nonce and expiry; one nonce space for all actions; cancellations bound to a specific proposal.
 - Approvers decode and display the exact bytes they sign; they never sign opaque blobs.
