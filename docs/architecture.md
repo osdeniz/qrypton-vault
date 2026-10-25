@@ -68,12 +68,16 @@ flowchart TB
 
 `set_policy` deliberately requires the operator: an attacker holding only the quorum cannot remove the rescue vault or change limits while an operator change is pending.
 
+### Allowlist: closed by default
+
+An empty allowlist admits no recipient at all; only the rescue vault remains reachable. Permitting arbitrary recipients is a separate, explicit `open_recipients` switch, and turning it on is a time-locked loosening. Accidentally removing the last allowlisted address therefore locks the vault down rather than opening it.
+
 ### Policy changes: loosening is time-locked
 
 If withdrawals and policy changes needed exactly the same authority with no delay, limits would mean little: whoever held both the operator and the quorum could raise a limit and withdraw in the same minute. The contract therefore compares the new policy with the current one:
 
-- **Tightening** — lowering a limit, removing a token, removing an allowlist entry (without emptying the allowlist, which would disable it) — applies immediately.
-- **Loosening** — anything else: raising a limit, adding a token or an allowlist entry, emptying the allowlist, setting, changing or removing the rescue vault — is proposed, waits out a public time lock, and is then executed. At most one policy change can be pending.
+- **Tightening** — lowering a limit, removing a token, removing an allowlist entry, turning `open_recipients` off — applies immediately.
+- **Loosening** — anything else: raising a limit, adding a token or an allowlist entry, turning `open_recipients` on, setting, changing or removing the rescue vault — is proposed, waits out a public time lock, and is then executed. At most one policy change can be pending.
 
 In the first phase the per-withdrawal limit alone does not bound the total an attacker with both factors can move (withdrawals can be repeated); what bounds it is the allowlist together with time-locked loosening: funds can only go to already-allowlisted addresses or the rescue vault. The rolling-window limit in the next phase adds an amount bound.
 

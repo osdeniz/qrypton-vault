@@ -19,14 +19,19 @@ pub struct TokenLimit {
 
 /// Institutional withdrawal policy, mirroring the contract's `Policy`.
 ///
-/// Deny by default: a token without a [`TokenLimit`] entry cannot be withdrawn.
+/// Deny by default: a token without a [`TokenLimit`] entry cannot be withdrawn,
+/// and only allowlisted recipients (plus the rescue vault) can receive funds
+/// unless `open_recipients` is set.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Policy {
     pub limits: Vec<TokenLimit>,
     /// Length of the rolling window in seconds.
     pub window_seconds: u64,
-    /// If non-empty, withdrawals may only go to these addresses.
+    /// Recipients withdrawals may go to. Closed by default: an empty
+    /// allowlist permits no recipient (only the rescue vault).
     pub allowlist: Vec<AddressBytes>,
+    /// Lifts the allowlist and permits any recipient. Off by default.
+    pub open_recipients: bool,
     /// Pre-allowlisted rescue vault; withdrawals to it skip amount limits and
     /// the allowlist (operator and PQ quorum are still required).
     pub rescue_vault: Option<AddressBytes>,

@@ -70,7 +70,8 @@ pub struct TokenLimit {
 }
 
 /// Institutional withdrawal policy. Deny by default: a token without a
-/// [`TokenLimit`] cannot be withdrawn.
+/// [`TokenLimit`] cannot be withdrawn, and a recipient not on the allowlist
+/// cannot receive funds unless `open_recipients` is set.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Policy {
@@ -78,8 +79,12 @@ pub struct Policy {
     /// Rolling-window length for `max_per_window` (next phase; not enforced in
     /// the first phase).
     pub window_seconds: u64,
-    /// If non-empty, withdrawals may only go to these addresses.
+    /// Recipients withdrawals may go to. Closed by default: an empty
+    /// allowlist permits no recipient at all (only the rescue vault).
     pub allowlist: Vec<Address>,
+    /// Explicit switch that lifts the allowlist and permits any recipient.
+    /// Off by default; turning it on counts as loosening (time-locked).
+    pub open_recipients: bool,
     /// Pre-allowlisted rescue vault (typically another Qrypton Vault controlled
     /// by the same institution, with its own, separate signer set and operator,
     /// preferably on a separate HSM). Withdrawals to it still need the operator and

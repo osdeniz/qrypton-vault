@@ -34,16 +34,17 @@ A short overview. A full threat model is part of milestone M4 together with the 
 - Operator change needs only the quorum, so a lost or broken classical key cannot lock the vault; the operator cannot cancel it alone, so a stolen operator key cannot block recovery.
 - Operator change and key rotation are time-locked and publicly visible; at most one operator change can be pending; executing a key rotation cancels any pending operator change.
 - **Pre-allowlisted rescue vault:** withdrawals to it skip amount limits and the allowlist, so a copied quorum is answered by moving funds out within the time lock. The rescue vault is controlled by a separate quorum and operator, preferably on a separate HSM, so the keys an attacker copied do not reach it. Policy changes need the operator, so a quorum-only attacker cannot remove the rescue vault.
+- **Allowlist closed by default:** an empty allowlist admits no recipient (only the rescue vault); opening the vault to arbitrary recipients is an explicit, time-locked `open_recipients` switch, so removing the last address locks the vault rather than opening it.
 - Canonical, domain-separated messages bound to network, vault, action, nonce and expiry; one nonce space for all actions; cancellations bound to a specific proposal.
 - Approvers decode and display the exact bytes they sign; they never sign opaque blobs.
-- **Loosening policy changes are time-locked** (higher limits, new tokens or recipients, emptying the allowlist, changing the rescue vault); tightening applies immediately. An attacker holding both the operator and the quorum therefore cannot raise a limit or allowlist their own address and withdraw in the same minute.
+- **Loosening policy changes are time-locked** (higher limits, new tokens or recipients, turning on `open_recipients`, changing the rescue vault); tightening applies immediately. An attacker holding both the operator and the quorum therefore cannot raise a limit or allowlist their own address and withdraw in the same minute.
 - **No upgrade entry point in the current phase:** deployed code cannot be replaced. Migration and incident response use the same path: withdraw to a new (rescue) vault.
 - No custom cryptography: ML-DSA verification by the Soroban host, signing by HSM firmware in production (in development, an established open-source Rust ML-DSA library that has not yet been independently audited).
 
 ## Residual risks
 
 - A stolen quorum whose theft goes unnoticed for the whole time lock can replace the operator and then control the vault. Monitoring of `OperatorChangeProposed` events is therefore part of operating the vault.
-- An attacker holding **both** the operator and the quorum can still withdraw immediately to already-allowlisted addresses and to the rescue vault. In the first phase the per-withdrawal limit can be repeated, so the allowlist (plus time-locked loosening) is what bounds this case; with the allowlist disabled it is not bounded. The rolling-window limit (next phase) adds an amount bound.
+- An attacker holding **both** the operator and the quorum can still withdraw immediately to already-allowlisted addresses and to the rescue vault. In the first phase the per-withdrawal limit can be repeated, so the allowlist (plus time-locked loosening) is what bounds this case; if the institution has chosen `open_recipients`, it is not bounded. The rolling-window limit (next phase) adds an amount bound.
 - If the institution has lost (not just leaked) its quorum, the rescue path is unavailable.
 - If the rescue vault shares keys or HSMs with the main vault, the rescue path offers no protection against key copying; separation is an operational requirement.
 - A quorum-only attacker can re-submit a cancelled operator change indefinitely, so cancelling alone never ends the incident (see below).

@@ -49,6 +49,12 @@ fn withdraw_enforces_allowlist() {
 
 #[test]
 #[ignore = "pre-alpha"]
+fn empty_allowlist_admits_only_rescue_vault() {
+    todo!()
+}
+
+#[test]
+#[ignore = "pre-alpha"]
 fn withdraw_requires_threshold_distinct_approvals() {
     todo!()
 }
@@ -122,7 +128,7 @@ fn tightening_policy_change_applies_immediately() {
 #[test]
 #[ignore = "pre-alpha"]
 fn loosening_policy_change_is_timelocked() {
-    todo!("raise limit, add token, add allowlist entry, empty allowlist, change rescue vault")
+    todo!("raise limit, add token, add allowlist entry, open recipients, change rescue vault")
 }
 
 #[test]

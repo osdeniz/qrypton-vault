@@ -116,8 +116,9 @@ impl QryptonVault {
     /// 2. **Nonce** — `request.nonce` must not have been consumed before
     ///    (replay protection; shared with governance actions).
     /// 3. **Policy** — the token has a limit entry, the amount is within the
-    ///    per-withdrawal limit, and the recipient is on the allowlist if one is
-    ///    configured. Withdrawals to the policy's rescue vault skip the amount
+    ///    per-withdrawal limit, and the recipient is on the allowlist (closed
+    ///    by default: an empty allowlist admits nobody) unless
+    ///    `open_recipients` is set. Withdrawals to the policy's rescue vault skip the amount
     ///    limits and the allowlist, so funds can be moved to safety in one step.
     /// 4. **M-of-N ML-DSA** — rebuild the canonical `qrypton-vault/withdraw/v1`
     ///    message from `request`, the network id and this contract's address;
@@ -241,13 +242,14 @@ impl QryptonVault {
     ///
     /// The new policy is compared with the current one:
     ///
-    /// * **Tightening only** — every change lowers a limit, removes a token or
-    ///   removes an allowlist entry (but does not empty the allowlist, which
-    ///   would disable it), and the rescue vault is unchanged. Applied
+    /// * **Tightening only** — every change lowers a limit, removes a token,
+    ///   removes an allowlist entry (removing the last one closes the vault to
+    ///   all recipients but the rescue vault) or turns `open_recipients` off,
+    ///   and the rescue vault is unchanged. Applied
     ///   immediately; emits [`PolicyUpdated`] and returns
     ///   [`PolicyChangeOutcome::Applied`].
     /// * **Anything else is loosening** — raising a limit, adding a token or
-    ///   allowlist entry, emptying the allowlist, or setting, changing or
+    ///   allowlist entry, turning `open_recipients` on, or setting, changing or
     ///   removing the rescue vault. Scheduled behind a time lock; emits
     ///   [`PolicyChangeProposed`] and returns [`PolicyChangeOutcome::Scheduled`].
     ///   At most one policy change can be pending
