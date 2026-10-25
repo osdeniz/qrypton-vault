@@ -152,14 +152,20 @@ More detail: [docs/architecture.md](docs/architecture.md) · [docs/threat-model.
 
 ## Roadmap
 
-Instawards milestones, each with a measurable deliverable. See [docs/roadmap.md](docs/roadmap.md).
+Each milestone ends in a measurable, public deliverable. See [docs/roadmap.md](docs/roadmap.md).
+
+The first 30-day phase covers M1 and M2 plus the core policy layer (per-withdrawal limit, allowlist, time-locked rotation); M3 and M4 follow.
+
+**Dependency:** M1 depends on Protocol 30 reaching testnet (validator vote scheduled for 3 November 2026) and on the release of stellar-cli 30. Until then, contract logic is developed against a mock verifier.
 
 | | Milestone | Done when |
 |---|---|---|
-| **M1** | Vault contract and native ML-DSA verification | A withdrawal approved with ML-DSA-65 executes on testnet using the CAP-0087 host functions. The repo publishes measured CPU instructions, memory and fees for 1-of-1, 2-of-3 and 3-of-5 approvals. |
-| **M2** | Signer, software keystore, M-of-N | `qrypton-signer` generates keys, displays and approves requests, and an M-of-N testnet withdrawal succeeds with independent approvers. The negative cases are tested: duplicate signer, wrong network, expired request, reused nonce. |
+| **M1** | Vault contract and native ML-DSA verification | A withdrawal approved with ML-DSA-65 executes on testnet using the CAP-0087 host functions. The repo publishes measured CPU instructions, memory and fees for 1, 2 and 3 approvals (1-of-1, 2-of-3, 3-of-5) for ML-DSA-44/65/87. |
+| **M2** | Signer, software keystore, M-of-N, governance | `qrypton-signer` generates keys, displays and approves requests, and an M-of-N testnet withdrawal succeeds with independent approvers. Policy changes, time-locked key rotation and operator change, and rescue-vault withdrawals work on testnet. The negative cases are tested: duplicate signer, wrong network, wrong vault, expired request, reused nonce. |
 | **M3** | SDK and anchor demo | The anchor-reserve scenario in `examples/` runs end-to-end on testnet through `qrypton-sdk`, including event-based reconciliation. A recorded demo and an integration guide are published. |
 | **M4** | PKCS#11 HSM and independent review | ML-DSA signing runs inside an HSM through PKCS#11. An independent security review of the contract and signer is completed, and the findings and fixes are published. |
+
+**Next phase:** a rolling-window (e.g. daily) withdrawal limit, with withdrawals to the rescue vault exempt.
 
 ## Team
 
