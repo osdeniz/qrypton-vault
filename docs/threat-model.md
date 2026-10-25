@@ -45,7 +45,13 @@ A short overview. A full threat model is part of milestone M4 together with the 
 - A stolen quorum whose theft goes unnoticed for the whole time lock can replace the operator and then control the vault. Monitoring of `OperatorChangeProposed` events is therefore part of operating the vault.
 - If the institution has lost (not just leaked) its quorum, the rescue path is unavailable.
 - If the rescue vault shares keys or HSMs with the main vault, the rescue path offers no protection against key copying; separation is an operational requirement.
-- A quorum-only attacker can repeatedly propose operator changes that the institution must cancel; this is a nuisance, not a loss of funds.
+- A quorum-only attacker can re-submit a cancelled operator change indefinitely, so cancelling alone never ends the incident (see below).
+
+## Responding to a stolen quorum
+
+**Key rotation is not a defense once the quorum has been copied.** The attacker's operator change was proposed first, so its time lock expires before any rotation the institution proposes afterwards. Once it executes, the attacker holds both the operator and the quorum and can cancel the pending rotation. Cancelling the attacker's proposal does not help either: it can simply be proposed again.
+
+The correct response is therefore not to race the attacker with cancellations or rotations, but to **move all funds to the rescue vault immediately**, while the institution still holds both the operator and the quorum. Rotation and cancellation are clean-up steps afterwards, not the defense.
 
 ## Out of scope
 
