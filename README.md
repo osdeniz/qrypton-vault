@@ -4,11 +4,11 @@
 
 Why now:
 
-- **The building block is arriving.** Stellar's Quantum Preparedness Plan adds native ML-DSA verification to Soroban as its first stage ([CAP-0087](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0087.md), Protocol 30). What it does not provide is a custody product institutions can deploy as-is.
+- **The building block is live.** Stellar's Quantum Preparedness Plan adds native ML-DSA verification to Soroban as its first stage ([CAP-0087](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0087.md), Protocol 30, now active on testnet and mainnet). What it does not provide is a custody product institutions can deploy as-is.
 - **Resource estimates keep falling.** 2026 papers put a break of 256-bit elliptic-curve keys at roughly 1,200 logical qubits ([details below](#the-quantum-threat-in-numbers)).
 - **Regulators have set dates.** NIST, the US government and the EU all target 2030–2035 for moving away from quantum-vulnerable public-key cryptography, starting with high-risk systems.
 
-> **Status: Pre-alpha. Architecture and interfaces defined; implementation in progress.**
+> **Status: Pre-alpha. First ML-DSA-65-approved withdrawal executed on Stellar testnet (Protocol 30) — see [testnet evidence](docs/testnet-evidence.md).** Limits, the rescue vault and governance are not implemented yet. Do not use on mainnet.
 
 ---
 
@@ -58,7 +58,7 @@ Custody of financial assets is likely to fall into the high-risk category for mo
 
 In June 2026 the Stellar Development Foundation published a three-stage [Quantum Preparedness Plan](https://stellar.org/blog/foundation-news/introducing-the-quantum-preparedness-plan):
 
-- **Stage 1 (2026): post-quantum verification in Soroban.** ML-DSA verification is added as native host functions. Contract accounts can then use quantum-safe signing through account abstraction. The specification is [CAP-0087](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0087.md), which covers ML-DSA-44, -65 and -87 and ships in Protocol 30. At the time of writing, Protocol 30 is released in Stellar Core, and its [testnet and mainnet upgrade votes](https://stellar.org/blog/developers/bell-protocol-30-upgrade-guide) are scheduled for November 2026.
+- **Stage 1 (2026): post-quantum verification in Soroban.** ML-DSA verification is added as native host functions. Contract accounts can then use quantum-safe signing through account abstraction. The specification is [CAP-0087](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0087.md), which covers ML-DSA-44, -65 and -87 and ships in Protocol 30. Protocol 30 has been [voted in](https://stellar.org/blog/developers/bell-protocol-30-upgrade-guide) on testnet and mainnet; as of 24 November 2026 both networks report protocol version 30.
 - **Stage 2 (2027): PQ signers on classic accounts.** Quantum-safe signer types become first-class signers on existing `G...` accounts, with no address change.
 - **Stage 3 (timing driven by the threat): deprecation.** Ed25519 stops being accepted for new transaction authorization. Timing depends on quantum progress and ecosystem readiness.
 
@@ -86,7 +86,7 @@ As far as we know, no custody product institutions can use directly on Stellar y
 
 **Pre-configured rescue vault.** The time lock on its own only buys time to notice an attack; it does not stop an attacker who holds the quorum. Its real value comes with the rescue vault. When keys have been copied rather than lost, the institution still holds both the operator key and the quorum. During the waiting period it can move all funds to a rescue vault that was configured in the policy in advance. The rescue vault must be controlled by a **separate** quorum and operator, preferably on a separate HSM; if it shared the main vault's keys, an attacker who copied them could reach the rescue vault too. Withdrawals to the rescue vault skip amount limits and the allowlist, but still need the operator and the quorum. Because policy changes need the operator, an attacker holding only the quorum cannot remove the rescue vault; and because changing the rescue vault counts as loosening, even an attacker holding both cannot swap it without a public waiting period. The same path replaces upgrades: the contract has **no upgrade entry point**, and migrating to a new version means withdrawing to a new vault under the normal rules.
 
-The contract never implements ML-DSA; verification is delegated to the Soroban host behind a `PqVerifier` trait. The off-chain components do not implement ML-DSA either: in production, signing happens in HSM firmware; in development, it uses an established open-source Rust ML-DSA library that has not yet been independently audited.
+The contract never implements ML-DSA; verification is delegated to the Soroban host behind a `PqVerifier` trait. The off-chain components do not implement ML-DSA either: in production, signing happens in HSM firmware; in development, it uses the open-source `fips204` Rust crate, which has not been independently audited. That is deliberately a different implementation from the RustCrypto `ml-dsa` crate the Soroban host verifies with, so the compatibility tests compare two independent FIPS 204 implementations.
 
 ## Architecture
 
@@ -133,10 +133,11 @@ sequenceDiagram
         A2-->>Op: PqApproval
     end
     Op->>V: withdraw(request, approvals) + operator auth
-    V->>V: expiry → nonce → policy
+    V->>V: nonce not yet used? (else fail: no event, no change)
     loop each approval
         V->>H: ML-DSA verify
     end
+    V->>V: expiry → allowlist (else Rejected event, nonce consumed)
     V->>T: transfer(vault → recipient)
     V-->>Op: WithdrawExecuted event
 ```
@@ -156,7 +157,9 @@ Each milestone ends in a measurable, public deliverable. See [docs/roadmap.md](d
 
 The first 30-day phase covers M1 and M2 plus the core policy layer (per-withdrawal limit, default-closed allowlist, pre-configured rescue vault, and the shared time lock for key rotation, operator change and policy loosening); M3 and M4 follow.
 
-**Dependency:** M1 depends on Protocol 30 reaching testnet (validator vote scheduled for 3 November 2026) and on the release of stellar-cli 30. Until then, contract logic is developed against a mock verifier.
+**Dependency:** M1 depended on Protocol 30 reaching testnet and on the release of stellar-cli 30; both happened in November 2026.
+
+**Done so far:** a 1-of-1 ML-DSA-65-approved withdrawal on testnet with measured CPU, memory and fee, plus rejected (expired) and failed (corrupted signature) attempts on-chain — see [docs/testnet-evidence.md](docs/testnet-evidence.md). The rest of M1 (2-of-3 and 3-of-5 on testnet, ML-DSA-44/87 measurements) and everything after it remain.
 
 | | Milestone | Done when |
 |---|---|---|
@@ -173,9 +176,15 @@ The first 30-day phase covers M1 and M2 plus the core policy layer (per-withdraw
 
 ## Status
 
-Pre-alpha. Architecture and interfaces defined; implementation in progress.
+Pre-alpha. First ML-DSA-65-approved withdrawal executed on Stellar testnet (Protocol 30): [docs/testnet-evidence.md](docs/testnet-evidence.md).
 
-The workspace builds (`cargo check --workspace`, `stellar contract build`), but function bodies are `todo!()` and tests are skeletons marked `#[ignore]`. Do not use this code to hold assets.
+What works today:
+
+- **Vault contract:** constructor, deposit and the withdrawal path — operator authorization, replay protection, M-of-N ML-DSA verification with the native CAP-0087 host function, expiry and a default-closed allowlist, audit events.
+- **Signer:** `qrypton-signer keygen`, `show-pubkey` and `approve-withdraw` with an **unencrypted development** software keystore. Encryption at rest arrives in M2; production keys belong in an HSM.
+- **Tests:** compatibility tests in which `fips204` signatures are verified by the Soroban host, plus the replay, quorum and rejection rules ([scripts/testnet-demo.sh](scripts/testnet-demo.sh) reproduces the testnet run).
+
+Not implemented yet: token limits, the rescue vault, `set_policy` and all time-locked governance (key rotation, operator change, policy loosening), the PKCS#11 HSM backend and the SDK. Those functions are still `todo!()`, and the withdrawal path calls none of them. **Do not use this code on mainnet or to hold real assets.**
 
 ```
 contracts/vault/          Soroban vault contract (qrypton-vault-contract)
@@ -183,7 +192,8 @@ crates/qrypton-types/     Shared types and canonical message format
 crates/qrypton-signer/    Approver library + `qrypton-signer` CLI
 crates/qrypton-sdk/       Integration SDK
 examples/                 Anchor reserve withdrawal scenario (skeleton)
-docs/                     Architecture, threat model, roadmap
+scripts/                  Testnet demo
+docs/                     Architecture, threat model, roadmap, testnet evidence
 ```
 
 ---
