@@ -131,20 +131,27 @@ sequenceDiagram
     S-->>SDK: PqApproval (until M collected)
     SDK->>RPC: simulate + submit withdraw(request, approvals)
     RPC->>V: invoke
-    V->>V: operator.require_auth()
-    V->>V: 1 expiry · 2 nonce · 3 policy
-    alt rejected by 1–3
+    V->>V: 1 operator.require_auth()
+    V->>V: 2 nonce already used? → fail (no event, no change)
+    V->>H: 3 verify each approval (M distinct keys) → else fail (no change)
+    alt 4 expired or recipient not allowlisted
+        V->>V: consume nonce
         V-->>RPC: WithdrawRejected event, outcome = Rejected
     else passes
-        V->>H: 4 verify each approval (M-of-N)
-        V->>V: 5 consume nonce, update window
+        V->>V: 5 consume nonce
         V->>T: transfer
         V-->>RPC: WithdrawExecuted event
     end
     SDK-->>Op: SubmitResult
 ```
 
-Validation is ordered from cheapest to most expensive so that requests failing simple checks never pay for signature verification. Because Soroban rolls back all effects of a failed invocation (including events), policy-level rejections are returned as a non-reverting `Rejected` outcome so they leave an audit record; an invalid ML-DSA signature traps and fails the transaction.
+The order is chosen so that **nothing changes state and no event is emitted until the PQ quorum has been verified**:
+
+- A reused nonce fails first, before any signature verification, with no event and no state change. Approvals of past withdrawals are public on-chain; if a replay were verified and then recorded as a rejection, a stolen operator key could replay them to emit unlimited rejection events without the quorum.
+- Without M valid approvals from distinct keys the invocation fails and changes nothing, so an operator alone cannot consume (burn) a nonce and invalidate a request the quorum has approved.
+- Only a quorum-approved request is recorded: an expired request or a non-allowlisted recipient is returned as a non-reverting `Rejected` outcome with a `WithdrawRejected` event, and its nonce is consumed. Soroban rolls back events of failed invocations, so this is the only way a rejection can leave an audit record.
+
+In the current proof, token limits and the rescue-vault exemption are not enforced yet.
 
 ## Time-locked governance
 
@@ -182,8 +189,9 @@ The time-lock durations are deployment parameters.
 
 The contract calls ML-DSA only through the `PqVerifier` trait:
 
-- `NativeHostVerifier` — uses the Soroban host functions specified in [CAP-0087](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0087.md) (Protocol 30). The host traps on invalid signatures. The binding is written once the Protocol 30 SDK and tooling are stable.
-- `MockVerifier` — compiled only in unit tests, to exercise thresholds, duplicates and mismatches.
+- `NativeHostVerifier` — calls `env.crypto().ml_dsa_{44,65,87}_verify(public_key, message, signature, context)`, the host functions specified in [CAP-0087](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0087.md) (Protocol 30). The host traps on invalid signatures, failing the invocation.
+
+There is no mock verifier: unit tests run the same native host functions through `soroban-sdk` testutils, with approvals signed off-chain by the `fips204` crate, an implementation independent of the RustCrypto `ml-dsa` crate inside the host.
 
 ML-DSA-65 is the default parameter set; ML-DSA-87 is supported for NIST category 5. Pure ML-DSA (not HashML-DSA) with an empty FIPS 204 context is used; domain separation lives in the message.
 

@@ -35,6 +35,8 @@ A short overview. A full threat model is part of milestone M4 together with the 
 - Operator change and key rotation are time-locked and publicly visible; at most one operator change can be pending; executing a key rotation cancels any pending operator change.
 - **Pre-configured rescue vault:** withdrawals to it skip amount limits and the allowlist, so a copied quorum is answered by moving funds out within the time lock. The rescue vault is controlled by a separate quorum and operator, preferably on a separate HSM, so the keys an attacker copied do not reach it. Policy changes need the operator, so a quorum-only attacker cannot remove the rescue vault.
 - **Allowlist closed by default:** an empty allowlist admits no recipient (only the rescue vault); opening the vault to arbitrary recipients is an explicit, time-locked `open_recipients` switch, so removing the last address locks the vault rather than opening it.
+- **Replaying public approvals leaves no trace:** a request whose nonce is already used fails before any signature verification, with no event and no state change. Approvals of executed withdrawals are public, so verifying a replay first and recording it as a rejection would let a stolen operator key emit unlimited rejection events without the quorum (tested).
+- **An operator without the quorum cannot burn nonces:** a nonce is consumed only after M valid approvals from distinct keys; a call without them fails and changes nothing, so the same nonce still works for the properly approved request (tested).
 - Canonical, domain-separated messages bound to network, vault, action, nonce and expiry; one nonce space for all actions; cancellations bound to a specific proposal.
 - Approvers decode and display the exact bytes they sign; they never sign opaque blobs.
 - **Loosening policy changes are time-locked** (higher limits, new tokens or recipients, turning on `open_recipients`, changing the rescue vault); tightening applies immediately. An attacker holding both the operator and the quorum therefore cannot raise a limit or allowlist their own address and withdraw in the same minute.
@@ -48,6 +50,10 @@ A short overview. A full threat model is part of milestone M4 together with the 
 - If the institution has lost (not just leaked) its quorum, the rescue path is unavailable.
 - If the rescue vault shares keys or HSMs with the main vault, the rescue path offers no protection against key copying; separation is an operational requirement.
 - A quorum-only attacker can re-submit a cancelled operator change indefinitely, so cancelling alone never ends the incident (see below).
+
+## Current proof
+
+The testnet proof implements only the withdrawal path (operator, replay protection, M-of-N ML-DSA, expiry, default-closed allowlist). Token limits, the rescue vault and all time-locked governance are not implemented yet, so the mitigations above that rely on them are design, not code. The development software keystore is unencrypted; encryption at rest arrives in M2.
 
 ## Responding to a stolen quorum
 

@@ -6,7 +6,9 @@ The first 30-day phase covers M1 and M2 plus the core policy layer (per-withdraw
 
 ## Dependency
 
-M1 depends on Protocol 30 reaching testnet (validator vote scheduled for 3 November 2026; Protocol 30 includes [CAP-0087](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0087.md), native ML-DSA verification) and on the release of stellar-cli 30 (with the matching stable `soroban-sdk` 30.x). Until then, contract logic is developed and tested against `MockVerifier`.
+M1 depended on Protocol 30 reaching testnet (Protocol 30 includes [CAP-0087](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0087.md), native ML-DSA verification) and on the release of stellar-cli 30 and `soroban-sdk` 30. Both happened in November 2026.
+
+**Done so far:** a 1-of-1 ML-DSA-65-approved withdrawal on testnet with measured costs, and local tests for M-of-N, replay and rejection rules — see [testnet-evidence.md](testnet-evidence.md).
 
 ## M1 — Vault contract and native ML-DSA verification
 
@@ -20,7 +22,7 @@ M1 depends on Protocol 30 reaching testnet (validator vote scheduled for 3 Novem
 ## M2 — Signer, software keystore, M-of-N approval, governance
 
 - `qrypton-signer` CLI: `keygen`, `show-pubkey`, `approve-withdraw`.
-- `SoftwareKeystore` backend (encrypted at rest; development and testnet only), using an established open-source Rust ML-DSA library (not yet independently audited; production signing moves to the HSM in M4).
+- `SoftwareKeystore` backend: encryption at rest arrives in M2 (the current development keystore is unencrypted); development and testnet only, using the open-source `fips204` crate (not independently audited; production signing moves to the HSM in M4).
 - Approval flow: decode and display → policy pre-check → sign → approval.
 - Governance flows: `set_policy` (tightening immediate; loosening time-locked via `execute_policy_change` / `cancel_policy_change`); time-locked key rotation (`propose_key_rotation`, `execute_key_rotation`, `cancel_key_rotation`); time-locked, quorum-only operator change (`propose_operator_change`, `execute_operator_change`, `cancel_operator_change`).
 
