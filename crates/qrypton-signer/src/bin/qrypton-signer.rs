@@ -181,8 +181,8 @@ fn run(cli: Cli) -> Result<(), SignerError> {
             let message = build_message(&request)?;
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
+                .map_err(|_| SignerError::Backend("system clock is before 1970".into()))?
+                .as_secs();
             let ctx = ApprovalContext {
                 policy: None,
                 signer_index,

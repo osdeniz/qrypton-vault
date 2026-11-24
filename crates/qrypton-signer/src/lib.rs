@@ -18,10 +18,6 @@
 //! Status: pre-alpha. The software keystore, approval flow and CLI work; the
 //! PKCS#11 backend is still `todo!()`.
 
-// The PKCS#11 backend is still `todo!()`, so its parameters are unused.
-// Remove once it lands.
-#![allow(unused_variables)]
-
 pub mod approval;
 pub mod backend;
 mod error;

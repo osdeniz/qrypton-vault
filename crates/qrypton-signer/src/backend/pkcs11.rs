@@ -1,3 +1,7 @@
+// The PKCS#11 backend is still `todo!()`, so its parameters are unused.
+// Remove once it lands.
+#![allow(unused_variables)]
+
 use std::path::PathBuf;
 
 use qrypton_types::{MlDsaLevel, PqPublicKey, PqSignature};

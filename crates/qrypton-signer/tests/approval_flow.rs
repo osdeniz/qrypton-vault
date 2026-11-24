@@ -92,3 +92,23 @@ fn approval_carries_signer_index_and_matching_level() {
 fn pkcs11_backend_signs_inside_token() {
     todo!()
 }
+
+#[cfg(unix)]
+#[test]
+fn keystore_with_open_permissions_is_refused() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!("qrypton-signer-test-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("perm.qks");
+    let _ = std::fs::remove_file(&path);
+
+    SoftwareKeystore::generate(&path, MlDsaLevel::MlDsa65).unwrap();
+    assert!(SoftwareKeystore::open(&path).is_ok());
+
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(matches!(
+        SoftwareKeystore::open(&path),
+        Err(SignerError::Backend(_))
+    ));
+    std::fs::remove_dir_all(&dir).unwrap();
+}

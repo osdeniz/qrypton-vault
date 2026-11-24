@@ -50,7 +50,15 @@ impl SoftwareKeystore {
             level.name(),
             hex::encode(seed.as_ref())
         ));
-        file.write_all(contents.as_bytes())?;
+        if let Err(e) = file
+            .write_all(contents.as_bytes())
+            .and_then(|()| file.sync_all())
+        {
+            // Do not leave a truncated keystore behind that blocks a retry.
+            drop(file);
+            let _ = std::fs::remove_file(path);
+            return Err(e.into());
+        }
         Ok(Self {
             path: Some(path.to_path_buf()),
             level,
@@ -59,7 +67,21 @@ impl SoftwareKeystore {
     }
 
     /// Opens an existing keystore file.
+    ///
+    /// On Unix, refuses a file that group or other users can access (like
+    /// ssh does for private keys): the seed is stored unencrypted.
     pub fn open(path: &Path) -> Result<Self, SignerError> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(path)?.permissions().mode() & 0o777;
+            if mode & 0o077 != 0 {
+                return Err(SignerError::Backend(format!(
+                    "keystore {} is accessible by other users (mode {mode:o}); run `chmod 600` on it",
+                    path.display()
+                )));
+            }
+        }
         let contents = Zeroizing::new(std::fs::read_to_string(path)?);
         let mut lines = contents.lines();
         if lines.next() != Some(HEADER) {
