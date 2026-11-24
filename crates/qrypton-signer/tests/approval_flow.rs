@@ -106,9 +106,12 @@ fn keystore_with_open_permissions_is_refused() {
     assert!(SoftwareKeystore::open(&path).is_ok());
 
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
-    assert!(matches!(
-        SoftwareKeystore::open(&path),
-        Err(SignerError::Backend(_))
-    ));
+    let result = SoftwareKeystore::open(&path);
     std::fs::remove_dir_all(&dir).unwrap();
+    match result {
+        Err(SignerError::Backend(msg)) => {
+            assert!(msg.contains("accessible by other users"), "{msg}")
+        }
+        other => panic!("expected a permission error, got {:?}", other.err()),
+    }
 }

@@ -12,8 +12,9 @@
 //! The approval file holds one `PqApproval` in the JSON form `stellar contract
 //! invoke` accepts, e.g. `{"signer_index":0,"signature":{"MlDsa65":"<hex>"}}`.
 //!
-//! The software keystore is **unencrypted** and for development only;
-//! encryption at rest arrives in M2. The PKCS#11 (HSM) backend is not
+//! The software keystore is **unencrypted** and for development only; it is
+//! created with mode 0600 and refused if other users can read it. Encryption at
+//! rest arrives in M2. The PKCS#11 (HSM) backend is not
 //! implemented yet.
 
 use std::io::{BufRead, Write};

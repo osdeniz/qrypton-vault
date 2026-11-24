@@ -11,9 +11,8 @@
 //!   approval.
 //!
 //! This crate does not implement ML-DSA. Signing is delegated to the key
-//! backend: in development, an established open-source Rust ML-DSA library
-//! that has not yet been independently audited; in production, the HSM
-//! firmware via PKCS#11.
+//! backend: in development, the open-source `fips204` crate (not independently
+//! audited); in production, the HSM firmware via PKCS#11.
 //!
 //! Status: pre-alpha. The software keystore, approval flow and CLI work; the
 //! PKCS#11 backend is still `todo!()`.

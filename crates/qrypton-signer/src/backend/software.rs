@@ -1,5 +1,5 @@
-use std::fs::OpenOptions;
-use std::io::Write;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use fips204::traits::{KeyGen, SerDes, Signer};
@@ -71,18 +71,23 @@ impl SoftwareKeystore {
     /// On Unix, refuses a file that group or other users can access (like
     /// ssh does for private keys): the seed is stored unencrypted.
     pub fn open(path: &Path) -> Result<Self, SignerError> {
+        // One handle for both the permission check and the read, so the file
+        // cannot be swapped in between.
+        let mut file = File::open(path)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(path)?.permissions().mode() & 0o777;
+            let mode = file.metadata()?.permissions().mode() & 0o777;
             if mode & 0o077 != 0 {
                 return Err(SignerError::Backend(format!(
-                    "keystore {} is accessible by other users (mode {mode:o}); run `chmod 600` on it",
+                    "keystore {} is accessible by other users (mode {mode:o}); run `chmod 600` on it \
+                     (on file systems without Unix permissions, keep the keystore elsewhere)",
                     path.display()
                 )));
             }
         }
-        let contents = Zeroizing::new(std::fs::read_to_string(path)?);
+        let mut contents = Zeroizing::new(String::new());
+        file.read_to_string(&mut contents)?;
         let mut lines = contents.lines();
         if lines.next() != Some(HEADER) {
             return Err(SignerError::Backend(
