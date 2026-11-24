@@ -1486,6 +1486,7 @@ dependencies = [
 name = "qrypton-vault-contract"
 version = "0.0.1"
 dependencies = [
+ "qrypton-signer",
  "qrypton-types",
  "soroban-sdk",
 ]

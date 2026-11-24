@@ -18,3 +18,7 @@ qrypton-types = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+# Off-chain encoder and signer, so tests check on-chain/off-chain agreement and
+# verify fips204 signatures with the Soroban host's ML-DSA implementation.
+qrypton-types = { workspace = true, features = ["stellar"] }
+qrypton-signer = { workspace = true }
