@@ -70,10 +70,10 @@ As far as we know, no custody product institutions can use directly on Stellar y
 
 | Component | Role |
 |---|---|
-| **Vault contract** (`contracts/vault`) | Holds assets on Soroban. Each withdrawal requires the operator's classical authorization **and** ML-DSA approvals from M of N registered signers over a canonical, domain-separated message. It checks expiry, single-use nonces and the policy before any transfer, and emits an audit event for every state change. |
+| **Vault contract** (`contracts/vault`) | Holds assets on Soroban. Each withdrawal requires the operator's classical authorization **and** ML-DSA approvals from M of N registered signers (N ≤ 10) over a canonical, domain-separated message. Deposits are accepted only for tokens listed in the policy. It checks expiry, single-use nonces and the policy before any transfer, and emits an audit event for every state change. |
 | **Policy layer** | Per-token per-withdrawal limits, recipient allowlist (closed by default), a pre-configured rescue vault, and time-locked signer-set rotation and operator change. Policy changes that loosen controls (higher limits, new recipients, a different rescue vault) are time-locked; tightening applies immediately. A rolling-window (e.g. daily) limit is planned for the next phase. Policy changes require both the operator and the PQ quorum. |
-| **Signer** (`crates/qrypton-signer`) | Approver library and CLI. It decodes and displays the request, pre-checks it against the policy, signs with ML-DSA-65 (default) or ML-DSA-87, and outputs an approval. Key backends: software keystore for development, PKCS#11 HSM for production. |
-| **SDK** (`crates/qrypton-sdk`) | Builds requests, collects M-of-N approvals, submits through Stellar RPC and follows vault events. |
+| **Signer** (`crates/qrypton-signer`) | Approver library and CLI. It decodes and displays the request, pre-checks it (expiry today; the on-chain policy once the SDK can read it), signs with ML-DSA-65 (default) or ML-DSA-87, and outputs an approval. Key backends: software keystore for development, PKCS#11 HSM for production. |
+| **SDK** (`crates/qrypton-sdk`) | Builds requests, collects M-of-N approvals, submits through Stellar RPC and follows vault events. Interfaces only so far (M3). |
 
 **Flow in brief.** The treasury team builds a withdrawal request with the SDK. Approvers each review it in `qrypton-signer` and sign it on their HSM. Once M approvals are collected, the SDK submits the withdrawal with the operator's classical signature. The contract verifies everything and transfers the funds, and the institution's back office reconciles from the emitted events.
 
@@ -134,7 +134,7 @@ sequenceDiagram
     end
     Op->>V: withdraw(request, approvals) + operator auth
     V->>V: nonce not yet used? (else fail: no event, no change)
-    loop each approval
+    loop until M distinct signers are verified
         V->>H: ML-DSA verify
     end
     V->>V: expiry → allowlist (else Rejected event, nonce consumed)
@@ -180,11 +180,11 @@ Pre-alpha. First ML-DSA-65-approved withdrawal executed on Stellar testnet (Prot
 
 What works today:
 
-- **Vault contract:** constructor, deposit (policy-listed tokens only) and the withdrawal path — operator authorization, replay protection, M-of-N ML-DSA verification with the native CAP-0087 host function, expiry and a default-closed allowlist, audit events.
-- **Signer:** `qrypton-signer keygen`, `show-pubkey` and `approve-withdraw` with an **unencrypted development** software keystore. Encryption at rest arrives in M2; production keys belong in an HSM.
-- **Tests:** compatibility tests in which `fips204` signatures are verified by the Soroban host, plus the replay, quorum and rejection rules ([scripts/testnet-demo.sh](scripts/testnet-demo.sh) reproduces the testnet run).
+- **Vault contract:** constructor (up to 10 signers), deposit (policy-listed tokens only) and the withdrawal path — operator authorization, replay protection, M-of-N ML-DSA verification with the native CAP-0087 host function (approvals are checked in order until M are counted, so extra approvals after them are never verified), expiry and a default-closed allowlist, audit events.
+- **Signer:** `qrypton-signer keygen`, `show-pubkey` and `approve-withdraw` with an **unencrypted development** software keystore (created with mode 0600; a keystore readable by other users is refused). Encryption at rest arrives in M2; production keys belong in an HSM.
+- **Tests:** compatibility tests in which `fips204` signatures are verified by the Soroban host, plus the replay, quorum and rejection rules. [scripts/testnet-demo.sh](scripts/testnet-demo.sh) reproduces the testnet run and fails unless every on-chain outcome is the expected one.
 
-Not implemented yet: token limits, the rescue vault, `set_policy` and all time-locked governance (key rotation, operator change, policy loosening), the PKCS#11 HSM backend and the SDK. Those functions are still `todo!()`, and the withdrawal path calls none of them. **Do not use this code on mainnet or to hold real assets.**
+Not implemented yet: token limit amounts, the rescue vault, `set_policy` and all time-locked governance (key rotation, operator change, policy loosening), the PKCS#11 HSM backend and the SDK. Those functions are still `todo!()`, and the withdrawal path calls none of them. **Do not use this code on mainnet or to hold real assets.**
 
 ```
 contracts/vault/          Soroban vault contract (qrypton-vault-contract)

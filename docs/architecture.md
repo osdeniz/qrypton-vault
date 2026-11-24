@@ -43,8 +43,8 @@ flowchart TB
 | Component | Responsibility | Does **not** do |
 |---|---|---|
 | `qrypton-types` | Algorithm identifiers and sizes, canonical signed-message format, off-chain request/approval/policy types. `no_std`, shared with the contract. | Cryptography, I/O |
-| Vault contract | Custody of assets; PQ quorum + operator authorization; expiry, nonce and policy enforcement; signer-set, operator and policy governance; audit events. | Implement ML-DSA (delegated to the host) |
-| `qrypton-signer` | Hold one approver's key (via a backend), show the request, pre-check policy, sign, output a `PqApproval`. CLI: `keygen`, `show-pubkey`, `approve-withdraw`. | Submit transactions; decide policy |
+| Vault contract | Custody of assets (deposits only for policy-listed tokens); PQ quorum + operator authorization over a signer set of at most 10 keys; expiry, nonce and policy enforcement; signer-set, operator and policy governance; audit events. | Implement ML-DSA (delegated to the host) |
+| `qrypton-signer` | Hold one approver's key (via a backend), show the request, pre-check it (expiry; the policy when known), sign, output a `PqApproval`. CLI: `keygen`, `show-pubkey`, `approve-withdraw`. | Submit transactions; decide policy |
 | `qrypton-sdk` | Build requests, collect M-of-N approvals, submit via Stellar RPC, stream events. | Hold PQ keys |
 
 ## Authority model
@@ -133,7 +133,7 @@ sequenceDiagram
     RPC->>V: invoke
     V->>V: 1 operator.require_auth()
     V->>V: 2 nonce already used? → fail (no event, no change)
-    V->>H: 3 verify each approval (M distinct keys) → else fail (no change)
+    V->>H: 3 verify approvals until M distinct keys are counted → else fail (no change)
     alt 4 expired or recipient not allowlisted
         V->>V: consume nonce
         V-->>RPC: WithdrawRejected event, outcome = Rejected
@@ -149,9 +149,10 @@ The order is chosen so that **nothing changes state and no event is emitted unti
 
 - A reused nonce fails first, before any signature verification, with no event and no state change. Approvals of past withdrawals are public on-chain; if a replay were verified and then recorded as a rejection, a stolen operator key could replay them to emit unlimited rejection events without the quorum.
 - Without M valid approvals from distinct keys the invocation fails and changes nothing, so an operator alone cannot consume (burn) a nonce and invalidate a request the quorum has approved.
+- Approvals are checked in the order given until M are counted; approvals after them are never verified, so they add no ML-DSA cost and cannot block the request. An invalid approval placed before the threshold is reached still fails the call (the host traps), so submitters should send exactly M approvals.
 - Only a quorum-approved request is recorded: an expired request or a non-allowlisted recipient is returned as a non-reverting `Rejected` outcome with a `WithdrawRejected` event, and its nonce is consumed. Soroban rolls back events of failed invocations, so this is the only way a rejection can leave an audit record.
 
-In the current proof, token limits and the rescue-vault exemption are not enforced yet.
+Deposits are accepted only for tokens listed in the policy's `limits`, so an arbitrary contract posing as a token cannot make the vault emit a fake `Deposited` event. In the current proof, the limit amounts and the rescue-vault exemption are not enforced yet.
 
 ## Time-locked governance
 

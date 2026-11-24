@@ -8,11 +8,11 @@ The first 30-day phase covers M1 and M2 plus the core policy layer (per-withdraw
 
 M1 depended on Protocol 30 reaching testnet (Protocol 30 includes [CAP-0087](https://github.com/stellar/stellar-protocol/blob/master/core/cap-0087.md), native ML-DSA verification) and on the release of stellar-cli 30 and `soroban-sdk` 30. Both happened in November 2026.
 
-**Done so far:** a 1-of-1 ML-DSA-65-approved withdrawal on testnet with measured costs, and local tests for M-of-N, replay and rejection rules — see [testnet-evidence.md](testnet-evidence.md).
+**Done so far:** a 1-of-1 ML-DSA-65-approved withdrawal on testnet with measured costs (re-run with the current contract), and local tests for M-of-N, replay, rejection and deposit rules — see [testnet-evidence.md](testnet-evidence.md).
 
 ## M1 — Vault contract and native ML-DSA verification
 
-- Implement the vault contract: constructor, deposit, withdraw (expiry → nonce → policy → M-of-N → transfer → event), views.
+- Implement the vault contract: constructor, deposit, withdraw (operator → replay check → M-of-N → expiry and allowlist → transfer → event), views. The withdrawal path, deposits and views are done (see below); M1 completes them with M-of-N on testnet and the cost report.
 - Core policy layer: per-token per-withdrawal limit, recipient allowlist (closed by default), pre-configured rescue vault.
 - Implement `NativeHostVerifier` on the CAP-0087 host functions.
 - Implement the canonical message encoder on-chain and off-chain, with shared test vectors.

@@ -38,11 +38,13 @@ A short overview. A full threat model is part of milestone M4 together with the 
 - **Replaying public approvals leaves no trace:** a request whose nonce is already used fails before any signature verification, with no event and no state change. Approvals of executed withdrawals are public, so verifying a replay first and recording it as a rejection would let a stolen operator key emit unlimited rejection events without the quorum (tested).
 - **An operator without the quorum cannot burn nonces:** a nonce is consumed only after M valid approvals from distinct keys; a call without them fails and changes nothing, so the same nonce still works for the properly approved request (tested).
 - **Deposits accept only policy-listed tokens:** an arbitrary contract posing as a token cannot make the vault emit a fake `Deposited` event.
+- **Surplus approvals cannot veto:** approvals are checked in order until M are counted, so an invalid approval placed after them is never verified and cannot block an approved withdrawal (one placed before them still fails the call). The signer set is capped at 10 keys, validated by one function shared with the future key rotation.
+- **Development keystore hygiene:** the unencrypted keystore is created with mode 0600 and refused if other users can read it (the check and the read use the same file handle); a failed write leaves no partial file.
 - Canonical, domain-separated messages bound to network, vault, action, nonce and expiry; one nonce space for all actions; cancellations bound to a specific proposal.
 - Approvers decode and display the exact bytes they sign; they never sign opaque blobs.
 - **Loosening policy changes are time-locked** (higher limits, new tokens or recipients, turning on `open_recipients`, changing the rescue vault); tightening applies immediately. An attacker holding both the operator and the quorum therefore cannot raise a limit or allowlist their own address and withdraw in the same minute.
 - **No upgrade entry point in the current phase:** deployed code cannot be replaced. Migration and incident response use the same path: withdraw to a new (rescue) vault.
-- No custom cryptography: ML-DSA verification by the Soroban host, signing by HSM firmware in production (in development, an established open-source Rust ML-DSA library that has not yet been independently audited).
+- No custom cryptography: ML-DSA verification by the Soroban host, signing by HSM firmware in production (in development, the open-source `fips204` crate, which has not been independently audited).
 
 ## Residual risks
 
@@ -54,7 +56,7 @@ A short overview. A full threat model is part of milestone M4 together with the 
 
 ## Current proof
 
-The testnet proof implements only the withdrawal path (operator, replay protection, M-of-N ML-DSA, expiry, default-closed allowlist). Token limits, the rescue vault and all time-locked governance are not implemented yet, so the mitigations above that rely on them are design, not code. The development software keystore is unencrypted; encryption at rest arrives in M2.
+The testnet proof implements the deposit and withdrawal paths (policy-listed tokens, operator, replay protection, M-of-N ML-DSA, expiry, default-closed allowlist). Token limit amounts, the rescue vault and all time-locked governance are not implemented yet, so the mitigations above that rely on them are design, not code. The development software keystore is unencrypted; encryption at rest arrives in M2.
 
 ## Responding to a stolen quorum
 
