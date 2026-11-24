@@ -47,8 +47,9 @@
 //! `withdraw` (operator authorization, replay protection, M-of-N ML-DSA,
 //! expiry, allowlist) and the basic views.
 //!
-//! **Not implemented yet in this proof:** token limits (the per-token "deny by
-//! default" rule included), the rescue-vault exemption, `set_policy` and every
+//! **Not implemented yet in this proof:** token limit amounts and, for
+//! withdrawals, the per-token "deny by default" rule (deposits already enforce
+//! it), the rescue-vault exemption, `set_policy` and every
 //! time-locked governance action (key rotation, operator change, policy
 //! loosening). Those functions are `todo!()` and `withdraw` calls none of them.
 //! Do not use this contract on mainnet.
@@ -112,18 +113,8 @@ impl QryptonVault {
         threshold: u32,
         policy: Policy,
     ) {
-        if pq_signers.len() > MAX_SIGNERS {
-            panic_with_error!(&env, Error::TooManySigners);
-        }
-        if threshold == 0 || threshold > pq_signers.len() {
-            panic_with_error!(&env, Error::InvalidThreshold);
-        }
-        for i in 0..pq_signers.len() {
-            for j in (i + 1)..pq_signers.len() {
-                if pq_signers.get_unchecked(i) == pq_signers.get_unchecked(j) {
-                    panic_with_error!(&env, Error::DuplicateSigner);
-                }
-            }
+        if let Err(e) = validate_signer_set(&pq_signers, threshold) {
+            panic_with_error!(&env, e);
         }
         storage::init(&env, &operator, &pq_signers, threshold, &policy);
     }
@@ -177,12 +168,14 @@ impl QryptonVault {
     ///    operator key could replay them to emit unlimited rejection events
     ///    without the quorum.
     /// 3. **M-of-N ML-DSA** — rebuild the canonical `qrypton-vault/withdraw/v1`
-    ///    message from `request`, the network id and this contract's address;
-    ///    each approval must reference a distinct signer index of the current
-    ///    set (so a key is counted at most once) and verify under the native
-    ///    host function; at least `threshold` approvals are required. Any
-    ///    failure fails the invocation and changes nothing, so an operator
-    ///    without the quorum cannot consume a nonce.
+    ///    message from `request`, the network id and this contract's address,
+    ///    then check approvals in the order given until `threshold` of them are
+    ///    counted: each counted approval must reference a distinct signer index
+    ///    of the current set (so a key is counted at most once) and verify under
+    ///    the native host function. Approvals after the `threshold`-th are not
+    ///    inspected. Any failure among the counted ones fails the invocation and
+    ///    changes nothing, so an operator without the quorum cannot consume a
+    ///    nonce.
     /// 4. **Expiry and allowlist** — if the ledger timestamp is past
     ///    `request.expires_at`, or the recipient is not allowlisted (closed by
     ///    default) and `open_recipients` is off, the quorum-approved request is
@@ -448,9 +441,13 @@ impl QryptonVault {
 /// `msg` from distinct members of the current signer set. Returns the signer
 /// indices that were counted.
 ///
-/// Verification stops as soon as `threshold` approvals are counted: surplus
-/// approvals are ignored, so they cost no CPU and cannot veto a request the
-/// quorum has already approved.
+/// Approvals are checked in the order given and checking stops as soon as
+/// `threshold` are counted, so approvals placed after them are never verified:
+/// they add no ML-DSA verification cost (the host still deserializes the whole
+/// argument) and cannot veto the request. An invalid approval placed *before*
+/// the threshold is reached still fails the invocation, because the host traps
+/// on an invalid signature; submitters should send exactly `threshold`
+/// approvals.
 fn verify_quorum<V: PqVerifier>(
     env: &Env,
     msg: &Bytes,
@@ -481,6 +478,26 @@ fn verify_quorum<V: PqVerifier>(
         return Err(Error::InsufficientApprovals);
     }
     Ok(counted)
+}
+
+/// Checks a signer set: at most [`MAX_SIGNERS`] keys, `1 <= threshold <= N`,
+/// no duplicate keys. Shared by the constructor and, once implemented, key
+/// rotation, so no path can install a set that skips these rules.
+fn validate_signer_set(signers: &Vec<PqPublicKey>, threshold: u32) -> Result<(), Error> {
+    if signers.len() > MAX_SIGNERS {
+        return Err(Error::TooManySigners);
+    }
+    if threshold == 0 || threshold > signers.len() {
+        return Err(Error::InvalidThreshold);
+    }
+    for i in 0..signers.len() {
+        for j in (i + 1)..signers.len() {
+            if signers.get_unchecked(i) == signers.get_unchecked(j) {
+                return Err(Error::DuplicateSigner);
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Expiry and allowlist checks for a quorum-approved request.

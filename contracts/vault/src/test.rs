@@ -273,6 +273,22 @@ fn deposit_transfers_into_vault() {
 }
 
 #[test]
+fn invalid_approval_before_threshold_fails() {
+    // Order matters: the host traps on the first invalid signature it checks.
+    let s = setup(3, 2);
+    let req = s.request(100, 1);
+    let mut bad = s.approve(2, &req);
+    if let PqSignature::MlDsa65(sig) = &bad.signature {
+        let mut bytes = sig.to_array();
+        bytes[100] ^= 0x01;
+        bad.signature = PqSignature::MlDsa65(BytesN::from_array(&s.env, &bytes));
+    }
+    let approvals = vec![&s.env, bad, s.approve(0, &req), s.approve(1, &req)];
+    assert!(s.vault.try_withdraw(&req, &approvals).is_err());
+    assert_untouched(&s, 1, s.vault_events());
+}
+
+#[test]
 fn deposit_rejects_token_not_listed_in_policy() {
     let s = setup(1, 1);
     let other = s
@@ -535,6 +551,30 @@ fn constructor_rejects_threshold_above_signer_count() {
     env.register(
         QryptonVault,
         (Address::generate(&env), signers, 2_u32, policy),
+    );
+}
+
+#[test]
+fn constructor_accepts_max_signers() {
+    let env = Env::default();
+    let mut signers: Vec<PqPublicKey> = Vec::new(&env);
+    for i in 0..MAX_SIGNERS as usize {
+        signers.push_back(pq_public_key(&env, &keystore(i, MlDsaLevel::MlDsa65)));
+    }
+    let policy = Policy {
+        limits: vec![&env],
+        window_seconds: 0,
+        allowlist: vec![&env],
+        open_recipients: false,
+        rescue_vault: None,
+    };
+    let id = env.register(
+        QryptonVault,
+        (Address::generate(&env), signers, MAX_SIGNERS, policy),
+    );
+    assert_eq!(
+        QryptonVaultClient::new(&env, &id).signers().len(),
+        MAX_SIGNERS
     );
 }
 
