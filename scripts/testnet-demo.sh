@@ -31,8 +31,27 @@ mkdir -p "$DEMO_DIR"
 
 log() { printf '\n== %s\n' "$*" >&2; }
 record() { printf '%s=%q\n' "$1" "$2" >>"$OUT"; printf '   %s = %s\n' "$1" "$2" >&2; }
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 # Extracts the transaction hashes stellar-cli linked in a log file.
 tx_hashes() { grep -oE 'tx/[0-9a-f]{64}' "$1" | cut -d/ -f2 | awk '!seen[$0]++'; }
+rpc() {
+  curl -s -X POST "$RPC_URL" -H 'Content-Type: application/json' \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$1\",\"params\":$2}"
+}
+# Close time of the latest ledger: the clock the contract checks expiry against.
+ledger_time() {
+  rpc getLatestLedger '{}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["closeTime"])'
+}
+# Status of a submitted transaction (SUCCESS, FAILED or NOT_FOUND), waiting up to ~60 s.
+tx_status() {
+  local status=NOT_FOUND i
+  for i in $(seq 1 12); do
+    status=$(rpc getTransaction "{\"hash\":\"$1\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["status"])')
+    [ "$status" != NOT_FOUND ] && break
+    sleep 5
+  done
+  echo "$status"
+}
 
 log "Building contract and signer"
 stellar contract build --package qrypton-vault-contract >/dev/null
@@ -59,7 +78,8 @@ KEYSTORE="$DEMO_DIR/approver-0.qks"
 PUBKEY_JSON=$("$SIGNER" show-pubkey --keystore "$KEYSTORE" --json)
 
 log "Deploying vault (1 signer, threshold 1, allowlist = destination)"
-POLICY="{\"limits\":[],\"window_seconds\":0,\"allowlist\":[\"$DEST\"],\"open_recipients\":false,\"rescue_vault\":null}"
+# XLM is listed in `limits` so the vault accepts deposits of it (limits are not enforced yet).
+POLICY="{\"limits\":[{\"token\":\"$XLM\",\"max_per_withdrawal\":\"1000000000\",\"max_per_window\":\"1000000000\"}],\"window_seconds\":0,\"allowlist\":[\"$DEST\"],\"open_recipients\":false,\"rescue_vault\":null}"
 VAULT=$(stellar contract deploy --wasm "$WASM" --source qv-operator --network "$NETWORK" \
   -- --operator "$OPERATOR" --pq_signers "[$PUBKEY_JSON]" --threshold 1 --policy "$POLICY" \
   2>"$DEMO_DIR/deploy.log")
@@ -82,7 +102,8 @@ record DEPOSIT_TX "$(tx_hashes "$DEMO_DIR/deposit.log" | tail -1)"
 approve() {
   "$SIGNER" approve-withdraw --keystore "$KEYSTORE" --signer-index 0 \
     --network-passphrase "$PASSPHRASE" --vault "$VAULT" --to "$DEST" --token "$XLM" \
-    --amount "$2" --nonce "$1" --expires-at "$3" --out "$4" --yes 2>/dev/null
+    --amount "$2" --nonce "$1" --expires-at "$3" --out "$4" --yes 2>"$DEMO_DIR/signer.log" \
+    || { cat "$DEMO_DIR/signer.log" >&2; die "qrypton-signer refused to approve nonce $1"; }
 }
 # request_json NONCE AMOUNT EXPIRES_AT
 request_json() {
@@ -102,17 +123,23 @@ stellar contract invoke --id "$VAULT" --source qv-operator --network "$NETWORK" 
   >"$DEMO_DIR/withdraw-1.out" 2>"$DEMO_DIR/withdraw-1.log"
 record WITHDRAW_TX "$(tx_hashes "$DEMO_DIR/withdraw-1.log" | tail -1)"
 record WITHDRAW_RESULT "$(cat "$DEMO_DIR/withdraw-1.out")"
+[ "$(cat "$DEMO_DIR/withdraw-1.out")" = '"Executed"' ] || die "withdrawal 1 did not execute"
 
 log "2) Approved request that expires before it is submitted"
-EXP2=$(($(date +%s) + 20))
+EXP2=$(($(ledger_time) + 20))
 approve 2 25000000 "$EXP2" "$DEMO_DIR/approval-2.json"
 ARGS2=(-- withdraw --request "$(request_json 2 25000000 "$EXP2")" --approvals "[$(cat "$DEMO_DIR/approval-2.json")]")
 echo "   waiting for the ledger clock to pass expires_at=$EXP2 ..." >&2
-sleep 45
+for _ in $(seq 1 24); do
+  [ "$(ledger_time)" -gt "$EXP2" ] && break
+  sleep 5
+done
+[ "$(ledger_time)" -gt "$EXP2" ] || die "ledger time did not pass expires_at"
 stellar contract invoke --id "$VAULT" --source qv-operator --network "$NETWORK" "${ARGS2[@]}" \
   >"$DEMO_DIR/withdraw-2.out" 2>"$DEMO_DIR/withdraw-2.log"
 record EXPIRED_TX "$(tx_hashes "$DEMO_DIR/withdraw-2.log" | tail -1)"
 record EXPIRED_RESULT "$(cat "$DEMO_DIR/withdraw-2.out")"
+[ "$(cat "$DEMO_DIR/withdraw-2.out")" = '{"Rejected":1}' ] || die "expired request was not rejected"
 
 log "3) Corrupted signature, sent on-chain without simulation"
 EXP3=$(($(date +%s) + 900))
@@ -137,9 +164,15 @@ stellar tx encode <"$DEMO_DIR/bad-assembled.json" | stellar tx simulate --source
   >/dev/null 2>"$DEMO_DIR/bad-simulation.log" || true
 stellar tx encode <"$DEMO_DIR/bad-assembled.json" \
   | stellar tx sign --sign-with-key qv-operator --network "$NETWORK" >"$DEMO_DIR/bad-signed.xdr"
-record BAD_SIGNATURE_TX "$(stellar tx hash --network "$NETWORK" <"$DEMO_DIR/bad-signed.xdr")"
+BAD_TX=$(stellar tx hash --network "$NETWORK" <"$DEMO_DIR/bad-signed.xdr")
+# The send is expected to report a failed transaction; what matters is the
+# ledger outcome, checked below.
 stellar tx send --network "$NETWORK" <"$DEMO_DIR/bad-signed.xdr" \
   >"$DEMO_DIR/bad-send.json" 2>"$DEMO_DIR/bad-send.log" || true
+BAD_STATUS=$(tx_status "$BAD_TX")
+[ "$BAD_STATUS" = FAILED ] || { cat "$DEMO_DIR/bad-send.log" >&2; die "corrupted-signature tx is $BAD_STATUS, expected FAILED on-chain"; }
+grep -q 'ML_DSA_65' "$DEMO_DIR/bad-send.log" || die "tx failed, but not in the ML-DSA-65 verification"
+record BAD_SIGNATURE_TX "$BAD_TX"
 
 log "Final balances"
 record VAULT_BALANCE "$(stellar contract invoke --id "$XLM" --source qv-operator --network "$NETWORK" --send=no -- balance --id "$VAULT" 2>/dev/null)"
