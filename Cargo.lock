@@ -1459,6 +1459,12 @@ dependencies = [
 [[package]]
 name = "qrypton-types"
 version = "0.0.1"
+dependencies = [
+ "hex",
+ "qrypton-types",
+ "sha2",
+ "stellar-xdr",
+]
 
 [[package]]
 name = "qrypton-vault-contract"

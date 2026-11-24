@@ -140,3 +140,87 @@ impl core::fmt::Display for MessageError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for MessageError {}
+
+/// Byte writer for the canonical encoding.
+#[cfg(feature = "alloc")]
+#[derive(Default)]
+pub(crate) struct Writer {
+    out: alloc::vec::Vec<u8>,
+}
+
+#[cfg(feature = "alloc")]
+impl Writer {
+    /// `u8 length || tag`.
+    pub(crate) fn tag(&mut self, tag: DomainTag) {
+        let tag = tag.as_bytes();
+        self.out.push(tag.len() as u8);
+        self.out.extend_from_slice(tag);
+    }
+
+    /// `u32 length || XDR(ScVal::Address)`.
+    pub(crate) fn addr(&mut self, addr: &crate::request::AddressBytes) {
+        self.out
+            .extend_from_slice(&(addr.0.len() as u32).to_be_bytes());
+        self.out.extend_from_slice(&addr.0);
+    }
+
+    pub(crate) fn raw(&mut self, bytes: &[u8]) {
+        self.out.extend_from_slice(bytes);
+    }
+
+    pub(crate) fn finish(self) -> alloc::vec::Vec<u8> {
+        self.out
+    }
+}
+
+/// Byte reader for the canonical encoding.
+#[cfg(feature = "alloc")]
+pub(crate) struct Reader<'a> {
+    rest: &'a [u8],
+}
+
+#[cfg(feature = "alloc")]
+impl<'a> Reader<'a> {
+    pub(crate) fn new(bytes: &'a [u8]) -> Self {
+        Self { rest: bytes }
+    }
+
+    fn take(&mut self, n: usize) -> Result<&'a [u8], MessageError> {
+        if self.rest.len() < n {
+            return Err(MessageError::Truncated);
+        }
+        let (head, tail) = self.rest.split_at(n);
+        self.rest = tail;
+        Ok(head)
+    }
+
+    pub(crate) fn array<const N: usize>(&mut self) -> Result<[u8; N], MessageError> {
+        let mut out = [0u8; N];
+        out.copy_from_slice(self.take(N)?);
+        Ok(out)
+    }
+
+    pub(crate) fn expect_tag(&mut self, tag: DomainTag) -> Result<(), MessageError> {
+        let len = self.array::<1>()?[0] as usize;
+        if self.take(len)? != tag.as_bytes() {
+            return Err(MessageError::WrongDomain);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn addr(&mut self) -> Result<crate::request::AddressBytes, MessageError> {
+        let len = u32::from_be_bytes(self.array::<4>()?) as usize;
+        if len == 0 {
+            return Err(MessageError::InvalidAddress);
+        }
+        Ok(crate::request::AddressBytes(self.take(len)?.to_vec()))
+    }
+
+    pub(crate) fn finish(self) -> Result<(), MessageError> {
+        if self.rest.is_empty() {
+            Ok(())
+        } else {
+            Err(MessageError::TrailingBytes)
+        }
+    }
+}

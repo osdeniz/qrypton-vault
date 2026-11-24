@@ -13,5 +13,14 @@ default = ["std"]
 # `alloc` enables the owned (Vec-backed) types used by off-chain crates.
 alloc = []
 std = ["alloc"]
+# Off-chain helpers: strkey <-> XDR address conversion and network ids.
+stellar = ["std", "dep:stellar-xdr", "dep:sha2"]
 
 [dependencies]
+stellar-xdr = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+
+[dev-dependencies]
+hex = { workspace = true }
+# Enables the `stellar` feature for this crate's own tests.
+qrypton-types = { path = ".", features = ["stellar"] }

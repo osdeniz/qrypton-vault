@@ -10,7 +10,8 @@
 //! The crate is `no_std` so the Soroban contract can share constants and the
 //! message layout with off-chain code. Owned types require the `alloc` feature.
 //!
-//! Status: pre-alpha. Types and layouts are defined; encoders are not implemented.
+//! Status: pre-alpha. The `withdraw/v1` encoder is implemented and checked
+//! against the contract; governance message encoders are not implemented yet.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -28,6 +29,8 @@ pub mod governance;
 pub mod policy;
 #[cfg(feature = "alloc")]
 pub mod request;
+#[cfg(feature = "stellar")]
+pub mod stellar;
 
 pub use algorithm::MlDsaLevel;
 pub use message::{DomainTag, MessageError};
