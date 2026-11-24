@@ -64,8 +64,13 @@ VAULT=$(stellar contract deploy --wasm "$WASM" --source qv-operator --network "$
   -- --operator "$OPERATOR" --pq_signers "[$PUBKEY_JSON]" --threshold 1 --policy "$POLICY" \
   2>"$DEMO_DIR/deploy.log")
 record VAULT "$VAULT"
-record WASM_UPLOAD_TX "$(tx_hashes "$DEMO_DIR/deploy.log" | sed -n 1p)"
-record CONTRACT_CREATE_TX "$(tx_hashes "$DEMO_DIR/deploy.log" | sed -n 2p)"
+# The upload transaction only appears when this wasm was not installed before.
+if [ "$(tx_hashes "$DEMO_DIR/deploy.log" | wc -l)" -gt 1 ]; then
+  record WASM_UPLOAD_TX "$(tx_hashes "$DEMO_DIR/deploy.log" | head -1)"
+else
+  record WASM_UPLOAD_TX "already-installed"
+fi
+record CONTRACT_CREATE_TX "$(tx_hashes "$DEMO_DIR/deploy.log" | tail -1)"
 record WASM_HASH "$(grep -oE 'wasm hash [0-9a-f]{64}' "$DEMO_DIR/deploy.log" | cut -d' ' -f3)"
 
 log "Depositing 10 XLM"
