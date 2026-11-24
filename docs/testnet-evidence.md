@@ -4,7 +4,7 @@ A minimal proof that the Qrypton Vault withdrawal path works on Stellar testnet 
 
 **Scope of this proof.** One ML-DSA-65 signer, threshold 1, one allowlisted recipient, native XLM. Not implemented yet, and not exercised here: token limits, the rescue vault, `set_policy` and all time-locked governance (key rotation, operator change, policy loosening). M-of-N (2-of-3) is covered by local tests only. This is pre-alpha code; do not use it on mainnet.
 
-Reproduce with [`scripts/testnet-demo.sh`](../scripts/testnet-demo.sh). All values below come from a single run of that script on 2026-11-24.
+Reproduce with [`scripts/testnet-demo.sh`](../scripts/testnet-demo.sh). All values below come from a single run of that script on 2026-11-24, recorded with commit `b3fe8f0`. Later hardening (deposits limited to policy-listed tokens, verification stopping at the threshold, a cap on the signer set) does not change the 1-of-1 withdrawal path shown here; the script now also asserts each outcome.
 
 ## Setup
 

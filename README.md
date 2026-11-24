@@ -180,7 +180,7 @@ Pre-alpha. First ML-DSA-65-approved withdrawal executed on Stellar testnet (Prot
 
 What works today:
 
-- **Vault contract:** constructor, deposit and the withdrawal path — operator authorization, replay protection, M-of-N ML-DSA verification with the native CAP-0087 host function, expiry and a default-closed allowlist, audit events.
+- **Vault contract:** constructor, deposit (policy-listed tokens only) and the withdrawal path — operator authorization, replay protection, M-of-N ML-DSA verification with the native CAP-0087 host function, expiry and a default-closed allowlist, audit events.
 - **Signer:** `qrypton-signer keygen`, `show-pubkey` and `approve-withdraw` with an **unencrypted development** software keystore. Encryption at rest arrives in M2; production keys belong in an HSM.
 - **Tests:** compatibility tests in which `fips204` signatures are verified by the Soroban host, plus the replay, quorum and rejection rules ([scripts/testnet-demo.sh](scripts/testnet-demo.sh) reproduces the testnet run).
 
