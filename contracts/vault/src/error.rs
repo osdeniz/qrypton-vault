@@ -47,4 +47,8 @@ pub enum Error {
     /// A verifier reported an invalid signature without trapping. (The native
     /// host verifier traps instead, failing the invocation.)
     InvalidSignature = 20,
+    /// The signer set exceeds `MAX_SIGNERS`.
+    TooManySigners = 21,
+    /// The token is not listed in the policy, so the vault does not accept it.
+    TokenNotAccepted = 22,
 }

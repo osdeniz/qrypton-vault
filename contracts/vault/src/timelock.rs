@@ -12,8 +12,8 @@
 //!
 //! Wait durations are deployment parameters and are not documented here.
 
-// Pre-alpha skeleton: callers in `lib.rs` are still `todo!()`.
-#![allow(dead_code)]
+// Pre-alpha skeleton: every function here is still `todo!()` and unused.
+#![allow(dead_code, unused_variables)]
 
 use soroban_sdk::{contracttype, BytesN, Env, IntoVal, TryFromVal, Val};
 

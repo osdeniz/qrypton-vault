@@ -21,7 +21,8 @@ use soroban_sdk::{
 
 use crate::{
     message, Error, Policy, PqApproval, PqPublicKey, PqSignature, QryptonVault, QryptonVaultClient,
-    RejectReason, WithdrawExecuted, WithdrawOutcome, WithdrawRejected, WithdrawRequest,
+    RejectReason, TokenLimit, WithdrawExecuted, WithdrawOutcome, WithdrawRejected, WithdrawRequest,
+    MAX_SIGNERS,
 };
 
 const NOW: u64 = 1_000_000;
@@ -73,7 +74,15 @@ fn setup(n: usize, threshold: u32) -> Setup {
         signers.push_back(pq_public_key(&env, k));
     }
     let policy = Policy {
-        limits: vec![&env],
+        // Listing the token is what lets the vault accept deposits of it.
+        limits: vec![
+            &env,
+            TokenLimit {
+                token: sac.address(),
+                max_per_withdrawal: 1_000,
+                max_per_window: 1_000,
+            },
+        ],
         window_seconds: 0,
         allowlist: vec![&env, dest.clone()],
         open_recipients: false,
@@ -261,6 +270,47 @@ fn deposit_transfers_into_vault() {
     let s = setup(1, 1);
     assert_eq!(s.vault_balance(), DEPOSIT);
     assert_eq!(s.token.balance(&s.depositor), 1_000 - DEPOSIT);
+}
+
+#[test]
+fn deposit_rejects_token_not_listed_in_policy() {
+    let s = setup(1, 1);
+    let other = s
+        .env
+        .register_stellar_asset_contract_v2(Address::generate(&s.env));
+    token::StellarAssetClient::new(&s.env, &other.address()).mint(&s.depositor, &100);
+    assert_eq!(
+        s.vault.try_deposit(&s.depositor, &other.address(), &100),
+        Err(Ok(Error::TokenNotAccepted))
+    );
+    assert!(s.vault_events().is_empty());
+}
+
+#[test]
+fn surplus_approval_beyond_threshold_is_ignored() {
+    let s = setup(3, 2);
+    let req = s.request(100, 1);
+    let mut bad = s.approve(2, &req);
+    if let PqSignature::MlDsa65(sig) = &bad.signature {
+        let mut bytes = sig.to_array();
+        bytes[100] ^= 0x01;
+        bad.signature = PqSignature::MlDsa65(BytesN::from_array(&s.env, &bytes));
+    }
+    let approvals = vec![&s.env, s.approve(0, &req), s.approve(1, &req), bad];
+
+    s.env.cost_estimate().budget().reset_default();
+    assert_eq!(
+        s.vault.withdraw(&req, &approvals),
+        WithdrawOutcome::Executed
+    );
+    let verifications = s
+        .env
+        .cost_estimate()
+        .budget()
+        .tracker(soroban_sdk::xdr::ContractCostType::VerifyMlDsa65Sig)
+        .iterations;
+    assert_eq!(verifications, 2, "verification stops at the threshold");
+    assert_eq!(s.token.balance(&s.dest), 100);
 }
 
 // ---------------------------------------------------------------------------
@@ -471,7 +521,7 @@ fn recipient_outside_allowlist_is_rejected_with_event() {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "Error(Contract, #1)")]
 fn constructor_rejects_threshold_above_signer_count() {
     let env = Env::default();
     let signers = vec![&env, pq_public_key(&env, &keystore(0, MlDsaLevel::MlDsa65))];
@@ -489,7 +539,28 @@ fn constructor_rejects_threshold_above_signer_count() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "Error(Contract, #21)")]
+fn constructor_rejects_too_many_signers() {
+    let env = Env::default();
+    let mut signers: Vec<PqPublicKey> = Vec::new(&env);
+    for i in 0..=MAX_SIGNERS as usize {
+        signers.push_back(pq_public_key(&env, &keystore(i, MlDsaLevel::MlDsa65)));
+    }
+    let policy = Policy {
+        limits: vec![&env],
+        window_seconds: 0,
+        allowlist: vec![&env],
+        open_recipients: false,
+        rescue_vault: None,
+    };
+    env.register(
+        QryptonVault,
+        (Address::generate(&env), signers, 1_u32, policy),
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
 fn constructor_rejects_duplicate_signers() {
     let env = Env::default();
     let k = pq_public_key(&env, &keystore(0, MlDsaLevel::MlDsa65));

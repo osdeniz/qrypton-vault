@@ -43,8 +43,9 @@
 //!
 //! # Status: pre-alpha proof
 //!
-//! Implemented: constructor, `deposit`, `withdraw` (operator authorization,
-//! replay protection, M-of-N ML-DSA, expiry, allowlist) and the basic views.
+//! Implemented: constructor, `deposit` (policy-listed tokens only),
+//! `withdraw` (operator authorization, replay protection, M-of-N ML-DSA,
+//! expiry, allowlist) and the basic views.
 //!
 //! **Not implemented yet in this proof:** token limits (the per-token "deny by
 //! default" rule included), the rescue-vault exemption, `set_policy` and every
@@ -53,9 +54,6 @@
 //! Do not use this contract on mainnet.
 
 #![no_std]
-// Governance functions are still `todo!()`, so their parameters are unused.
-// Remove once governance lands.
-#![allow(unused_variables)]
 
 mod error;
 mod events;
@@ -84,6 +82,11 @@ use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, Byte
 
 use verifier::{NativeHostVerifier, PqVerifier, VerifyError};
 
+/// Maximum size of the PQ signer set. Keeps the signer set (up to 2592-byte
+/// keys each) well within one instance storage entry and bounds the
+/// constructor's duplicate check.
+pub const MAX_SIGNERS: u32 = 10;
+
 #[contract]
 pub struct QryptonVault;
 
@@ -98,8 +101,9 @@ impl QryptonVault {
     /// * `threshold` — number of PQ approvals required (M), `1 <= M <= N`.
     /// * `policy` — initial withdrawal policy, including the rescue vault.
     ///
-    /// Panics with [`Error::InvalidThreshold`] or [`Error::DuplicateSigner`]
-    /// on invalid input. (Policy limits are stored but not validated or
+    /// Panics with [`Error::TooManySigners`] (more than [`MAX_SIGNERS`]),
+    /// [`Error::InvalidThreshold`] or [`Error::DuplicateSigner`] on invalid
+    /// input. (Policy limits are stored but not validated or
     /// enforced in this proof.)
     pub fn __constructor(
         env: Env,
@@ -108,6 +112,9 @@ impl QryptonVault {
         threshold: u32,
         policy: Policy,
     ) {
+        if pq_signers.len() > MAX_SIGNERS {
+            panic_with_error!(&env, Error::TooManySigners);
+        }
         if threshold == 0 || threshold > pq_signers.len() {
             panic_with_error!(&env, Error::InvalidThreshold);
         }
@@ -123,13 +130,23 @@ impl QryptonVault {
 
     /// Deposits `amount` of `token` from `from` into the vault.
     ///
-    /// Requires `from.require_auth()`. Transfers via the token contract's
-    /// SEP-41 `transfer` and emits [`Deposited`]. Deposits are not subject to
-    /// PQ approval; only outflows are.
+    /// Requires `from.require_auth()`. Only tokens listed in the policy's
+    /// `limits` are accepted (deny by default), so an arbitrary contract posing
+    /// as a token cannot make the vault emit a fake [`Deposited`] event.
+    /// Transfers via the token contract's SEP-41 `transfer` and emits
+    /// [`Deposited`]. Deposits are not subject to PQ approval; only outflows
+    /// are.
     pub fn deposit(env: Env, from: Address, token: Address, amount: i128) -> Result<(), Error> {
         from.require_auth();
         if amount <= 0 {
             return Err(Error::InvalidAmount);
+        }
+        if !storage::policy(&env)
+            .limits
+            .iter()
+            .any(|limit| limit.token == token)
+        {
+            return Err(Error::TokenNotAccepted);
         }
         storage::bump_instance(&env);
         token::TokenClient::new(&env, &token).transfer(
@@ -241,6 +258,7 @@ impl QryptonVault {
     /// lock the vault. At most one operator change can be pending
     /// ([`Error::OperatorChangeAlreadyPending`]). The change becomes executable
     /// after a public time lock. Emits [`OperatorChangeProposed`].
+    #[allow(unused_variables)] // still `todo!()`
     pub fn propose_operator_change(
         env: Env,
         new_operator: Address,
@@ -254,6 +272,7 @@ impl QryptonVault {
     /// Permissionless: anyone may call it, because the change was approved by
     /// the quorum at proposal time and the waiting period has passed. Emits
     /// [`OperatorChangeExecuted`].
+    #[allow(unused_variables)] // still `todo!()`
     pub fn execute_operator_change(env: Env) -> Result<(), Error> {
         todo!()
     }
@@ -265,6 +284,7 @@ impl QryptonVault {
     /// hash of the pending proposal. The operator cannot cancel on its own, so
     /// a stolen classical key cannot block recovery. Emits
     /// [`OperatorChangeCancelled`] with [`CancelCause::Quorum`].
+    #[allow(unused_variables)] // still `todo!()`
     pub fn cancel_operator_change(env: Env, auth: GovernanceAuth) -> Result<(), Error> {
         todo!()
     }
@@ -280,6 +300,7 @@ impl QryptonVault {
     /// be pending. The proposal becomes executable only after a time lock,
     /// giving the institution a window to detect and cancel an unauthorized
     /// rotation. Emits [`KeyRotationProposed`].
+    #[allow(unused_variables)] // still `todo!()`
     pub fn propose_key_rotation(
         env: Env,
         new_signers: Vec<PqPublicKey>,
@@ -300,6 +321,7 @@ impl QryptonVault {
     /// [`PolicyChangeCancelled`] with [`CancelCause::KeyRotation`]): those
     /// proposals were approved by keys that may just have been removed, and
     /// must not be executable afterwards.
+    #[allow(unused_variables)] // still `todo!()`
     pub fn execute_key_rotation(env: Env) -> Result<(), Error> {
         todo!()
     }
@@ -309,6 +331,7 @@ impl QryptonVault {
     /// Requires `operator.require_auth()` and current-threshold PQ approvals
     /// over the `qrypton-vault/cancel-key-rotation/v1` message, which commits
     /// to the hash of the pending proposal. Emits [`KeyRotationCancelled`].
+    #[allow(unused_variables)] // still `todo!()`
     pub fn cancel_key_rotation(env: Env, auth: GovernanceAuth) -> Result<(), Error> {
         todo!()
     }
@@ -343,6 +366,7 @@ impl QryptonVault {
     /// Without this, an attacker holding both the operator and the quorum could
     /// raise a limit or allowlist their own address and withdraw in the same
     /// minute; with it, loosening is publicly visible before it takes effect.
+    #[allow(unused_variables)] // still `todo!()`
     pub fn set_policy(
         env: Env,
         policy: Policy,
@@ -356,6 +380,7 @@ impl QryptonVault {
     ///
     /// Permissionless: the change was approved at proposal time. Emits
     /// [`PolicyUpdated`].
+    #[allow(unused_variables)] // still `todo!()`
     pub fn execute_policy_change(env: Env) -> Result<(), Error> {
         todo!()
     }
@@ -366,6 +391,7 @@ impl QryptonVault {
     /// over the `qrypton-vault/cancel-policy-change/v1` message, which commits
     /// to the hash of the pending proposal. Emits [`PolicyChangeCancelled`]
     /// with [`CancelCause::Quorum`].
+    #[allow(unused_variables)] // still `todo!()`
     pub fn cancel_policy_change(env: Env, auth: GovernanceAuth) -> Result<(), Error> {
         todo!()
     }
@@ -395,16 +421,19 @@ impl QryptonVault {
     }
 
     /// The pending operator change, if any.
+    #[allow(unused_variables)] // still `todo!()`
     pub fn pending_operator_change(env: Env) -> Option<PendingOperatorChange> {
         todo!()
     }
 
     /// The pending (loosening) policy change, if any.
+    #[allow(unused_variables)] // still `todo!()`
     pub fn pending_policy_change(env: Env) -> Option<PendingPolicyChange> {
         todo!()
     }
 
     /// The pending signer-set rotation, if any.
+    #[allow(unused_variables)] // still `todo!()`
     pub fn pending_rotation(env: Env) -> Option<PendingRotation> {
         todo!()
     }
@@ -418,6 +447,10 @@ impl QryptonVault {
 /// Verifies that `approvals` contain at least `threshold` valid signatures over
 /// `msg` from distinct members of the current signer set. Returns the signer
 /// indices that were counted.
+///
+/// Verification stops as soon as `threshold` approvals are counted: surplus
+/// approvals are ignored, so they cost no CPU and cannot veto a request the
+/// quorum has already approved.
 fn verify_quorum<V: PqVerifier>(
     env: &Env,
     msg: &Bytes,
@@ -427,6 +460,9 @@ fn verify_quorum<V: PqVerifier>(
     let threshold = storage::threshold(env);
     let mut counted: Vec<u32> = Vec::new(env);
     for approval in approvals.iter() {
+        if counted.len() == threshold {
+            break;
+        }
         let index = approval.signer_index;
         if index >= signers.len() {
             return Err(Error::UnknownSigner);
