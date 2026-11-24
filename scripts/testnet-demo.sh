@@ -16,7 +16,8 @@
 #
 # The software keystore is UNENCRYPTED and for development only.
 
-set -euo pipefail
+set -Eeuo pipefail
+trap 'echo "error: step failed at line $LINENO (see logs in ${QV_DEMO_DIR:-.demo}/)" >&2' ERR
 
 NETWORK=testnet
 PASSPHRASE="Test SDF Network ; September 2015"
@@ -35,19 +36,22 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 # Extracts the transaction hashes stellar-cli linked in a log file.
 tx_hashes() { grep -oE 'tx/[0-9a-f]{64}' "$1" | cut -d/ -f2 | awk '!seen[$0]++'; }
 rpc() {
-  curl -s -X POST "$RPC_URL" -H 'Content-Type: application/json' \
+  curl -s --connect-timeout 10 --max-time 30 -X POST "$RPC_URL" -H 'Content-Type: application/json' \
     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$1\",\"params\":$2}"
 }
 # Close time of the latest ledger: the clock the contract checks expiry against.
 ledger_time() {
   rpc getLatestLedger '{}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["closeTime"])'
 }
-# Status of a submitted transaction (SUCCESS, FAILED or NOT_FOUND), waiting up to ~60 s.
+# Status of a submitted transaction (SUCCESS, FAILED or NOT_FOUND), waiting up
+# to ~60 s. Transient RPC or parse errors count as "not found yet".
 tx_status() {
   local status=NOT_FOUND i
   for i in $(seq 1 12); do
-    status=$(rpc getTransaction "{\"hash\":\"$1\"}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["status"])')
-    [ "$status" != NOT_FOUND ] && break
+    status=$(rpc getTransaction "{\"hash\":\"$1\"}" \
+      | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["status"])' 2>/dev/null) \
+      || status=NOT_FOUND
+    case "$status" in SUCCESS | FAILED) break ;; esac
     sleep 5
   done
   echo "$status"
@@ -126,11 +130,15 @@ record WITHDRAW_RESULT "$(cat "$DEMO_DIR/withdraw-1.out")"
 [ "$(cat "$DEMO_DIR/withdraw-1.out")" = '"Executed"' ] || die "withdrawal 1 did not execute"
 
 log "2) Approved request that expires before it is submitted"
-EXP2=$(($(ledger_time) + 20))
+# Expiry must be in the future for both the ledger (checked by the vault) and
+# the local clock (checked by the signer before it signs).
+NOW_LEDGER=$(ledger_time)
+NOW_LOCAL=$(date +%s)
+EXP2=$(( (NOW_LEDGER > NOW_LOCAL ? NOW_LEDGER : NOW_LOCAL) + 20 ))
 approve 2 25000000 "$EXP2" "$DEMO_DIR/approval-2.json"
 ARGS2=(-- withdraw --request "$(request_json 2 25000000 "$EXP2")" --approvals "[$(cat "$DEMO_DIR/approval-2.json")]")
 echo "   waiting for the ledger clock to pass expires_at=$EXP2 ..." >&2
-for _ in $(seq 1 24); do
+for _ in $(seq 1 36); do
   [ "$(ledger_time)" -gt "$EXP2" ] && break
   sleep 5
 done
@@ -171,14 +179,23 @@ stellar tx send --network "$NETWORK" <"$DEMO_DIR/bad-signed.xdr" \
   >"$DEMO_DIR/bad-send.json" 2>"$DEMO_DIR/bad-send.log" || true
 BAD_STATUS=$(tx_status "$BAD_TX")
 [ "$BAD_STATUS" = FAILED ] || { cat "$DEMO_DIR/bad-send.log" >&2; die "corrupted-signature tx is $BAD_STATUS, expected FAILED on-chain"; }
-grep -q 'ML_DSA_65' "$DEMO_DIR/bad-send.log" || die "tx failed, but not in the ML-DSA-65 verification"
+grep -q 'failed verification' "$DEMO_DIR/bad-send.log" && grep -q 'ML_DSA_65' "$DEMO_DIR/bad-send.log" \
+  || die "tx failed, but not in the ML-DSA-65 verification"
 record BAD_SIGNATURE_TX "$BAD_TX"
 
-log "Final balances"
-record VAULT_BALANCE "$(stellar contract invoke --id "$XLM" --source qv-operator --network "$NETWORK" --send=no -- balance --id "$VAULT" 2>/dev/null)"
-record NONCE_1_USED "$(stellar contract invoke --id "$VAULT" --source qv-operator --network "$NETWORK" --send=no -- is_nonce_used --nonce 1 2>/dev/null)"
-record NONCE_2_USED "$(stellar contract invoke --id "$VAULT" --source qv-operator --network "$NETWORK" --send=no -- is_nonce_used --nonce 2 2>/dev/null)"
-record NONCE_3_USED "$(stellar contract invoke --id "$VAULT" --source qv-operator --network "$NETWORK" --send=no -- is_nonce_used --nonce 3 2>/dev/null)"
+log "Final state"
+view() { stellar contract invoke --id "$1" --source qv-operator --network "$NETWORK" --send=no -- "${@:2}" 2>/dev/null; }
+VAULT_BALANCE=$(view "$XLM" balance --id "$VAULT")
+NONCE_1_USED=$(view "$VAULT" is_nonce_used --nonce 1)
+NONCE_2_USED=$(view "$VAULT" is_nonce_used --nonce 2)
+NONCE_3_USED=$(view "$VAULT" is_nonce_used --nonce 3)
+record VAULT_BALANCE "$VAULT_BALANCE"
+record NONCE_1_USED "$NONCE_1_USED"
+record NONCE_2_USED "$NONCE_2_USED"
+record NONCE_3_USED "$NONCE_3_USED"
+# 10 XLM deposited, 2.5 XLM withdrawn; nonces 1 and 2 consumed, 3 untouched.
+[ "$VAULT_BALANCE" = '"75000000"' ] || die "unexpected vault balance $VAULT_BALANCE"
+[ "$NONCE_1_USED $NONCE_2_USED $NONCE_3_USED" = "true true false" ] || die "unexpected nonce state"
 
 log "Done. Evidence written to $OUT"
 echo "   vault: $EXPLORER/contract/$VAULT" >&2
