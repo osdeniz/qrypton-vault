@@ -38,20 +38,29 @@
 //! be replaced. Migration to a new version means withdrawing to a new vault
 //! under the normal authorization rules.
 //!
-//! ML-DSA verification sits behind the [`verifier::PqVerifier`] trait so the
-//! contract can use the native Soroban host function once it is available on
-//! the network, and a mock in unit tests.
+//! ML-DSA verification sits behind the [`verifier::PqVerifier`] trait and uses
+//! the native Soroban host functions of CAP-0087 (Protocol 30).
 //!
-//! Status: pre-alpha. Interfaces, types and events are defined; function bodies
-//! are `todo!()`.
+//! # Status: pre-alpha proof
+//!
+//! Implemented: constructor, `deposit`, `withdraw` (operator authorization,
+//! replay protection, M-of-N ML-DSA, expiry, allowlist) and the basic views.
+//!
+//! **Not implemented yet in this proof:** token limits (the per-token "deny by
+//! default" rule included), the rescue-vault exemption, `set_policy` and every
+//! time-locked governance action (key rotation, operator change, policy
+//! loosening). Those functions are `todo!()` and `withdraw` calls none of them.
+//! Do not use this contract on mainnet.
 
 #![no_std]
-// Pre-alpha skeleton: bodies are `todo!()`, so parameters are not used yet.
-// Remove once the implementation lands.
+// Governance functions are still `todo!()`, so their parameters are unused.
+// Remove once governance lands.
 #![allow(unused_variables)]
 
 mod error;
 mod events;
+mod message;
+mod storage;
 mod timelock;
 mod types;
 pub mod verifier;
@@ -71,7 +80,9 @@ pub use types::{
     WithdrawOutcome, WithdrawRequest,
 };
 
-use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, Bytes, Env, Vec};
+
+use verifier::{NativeHostVerifier, PqVerifier, VerifyError};
 
 #[contract]
 pub struct QryptonVault;
@@ -87,8 +98,9 @@ impl QryptonVault {
     /// * `threshold` — number of PQ approvals required (M), `1 <= M <= N`.
     /// * `policy` — initial withdrawal policy, including the rescue vault.
     ///
-    /// Panics with [`Error::InvalidThreshold`], [`Error::DuplicateSigner`] or
-    /// [`Error::InvalidPolicy`] on invalid input.
+    /// Panics with [`Error::InvalidThreshold`] or [`Error::DuplicateSigner`]
+    /// on invalid input. (Policy limits are stored but not validated or
+    /// enforced in this proof.)
     pub fn __constructor(
         env: Env,
         operator: Address,
@@ -96,7 +108,17 @@ impl QryptonVault {
         threshold: u32,
         policy: Policy,
     ) {
-        todo!()
+        if threshold == 0 || threshold > pq_signers.len() {
+            panic_with_error!(&env, Error::InvalidThreshold);
+        }
+        for i in 0..pq_signers.len() {
+            for j in (i + 1)..pq_signers.len() {
+                if pq_signers.get_unchecked(i) == pq_signers.get_unchecked(j) {
+                    panic_with_error!(&env, Error::DuplicateSigner);
+                }
+            }
+        }
+        storage::init(&env, &operator, &pq_signers, threshold, &policy);
     }
 
     /// Deposits `amount` of `token` from `from` into the vault.
@@ -105,47 +127,106 @@ impl QryptonVault {
     /// SEP-41 `transfer` and emits [`Deposited`]. Deposits are not subject to
     /// PQ approval; only outflows are.
     pub fn deposit(env: Env, from: Address, token: Address, amount: i128) -> Result<(), Error> {
-        todo!()
+        from.require_auth();
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+        storage::bump_instance(&env);
+        token::TokenClient::new(&env, &token).transfer(
+            &from,
+            env.current_contract_address(),
+            &amount,
+        );
+        Deposited {
+            token,
+            from,
+            amount,
+        }
+        .publish(&env);
+        Ok(())
     }
 
     /// Executes a withdrawal approved by at least `threshold` PQ signers.
     ///
-    /// Requires `operator.require_auth()` (the classical Stellar signature).
+    /// Order of checks — nothing changes state, and no event is emitted, until
+    /// the PQ quorum has been verified:
     ///
-    /// Validation order — cheapest and most specific checks first, expensive
-    /// signature verification last:
-    ///
-    /// 1. **Expiry** — `request.expires_at` must be later than the current
-    ///    ledger timestamp.
-    /// 2. **Nonce** — `request.nonce` must not have been consumed before
-    ///    (replay protection; shared with governance actions).
-    /// 3. **Policy** — the token has a limit entry, the amount is within the
-    ///    per-withdrawal limit, and the recipient is on the allowlist (closed
-    ///    by default: an empty allowlist admits nobody) unless
-    ///    `open_recipients` is set. Withdrawals to the policy's rescue vault skip the amount
-    ///    limits and the allowlist, so funds can be moved to safety in one step.
-    /// 4. **M-of-N ML-DSA** — rebuild the canonical `qrypton-vault/withdraw/v1`
+    /// 1. **Operator** — `operator.require_auth()` (the classical signature).
+    ///    Non-positive amounts fail with [`Error::InvalidAmount`].
+    /// 2. **Replay** — if `request.nonce` was already consumed, fail with
+    ///    [`Error::NonceAlreadyUsed`]: no event, no state change, no signature
+    ///    verification. Approvals of past withdrawals are public on-chain; if a
+    ///    replay were verified first and then recorded as a rejection, a stolen
+    ///    operator key could replay them to emit unlimited rejection events
+    ///    without the quorum.
+    /// 3. **M-of-N ML-DSA** — rebuild the canonical `qrypton-vault/withdraw/v1`
     ///    message from `request`, the network id and this contract's address;
-    ///    check approvals reference distinct signer indices of the current
-    ///    signer set; verify each signature with [`verifier::PqVerifier`];
-    ///    require at least `threshold` valid approvals.
-    /// 5. **Transfer** — mark the nonce consumed, update limit accounting,
-    ///    then call the token contract's `transfer` (state is updated before
-    ///    the external call).
-    /// 6. **Event** — emit [`WithdrawExecuted`].
+    ///    each approval must reference a distinct signer index of the current
+    ///    set (so a key is counted at most once) and verify under the native
+    ///    host function; at least `threshold` approvals are required. Any
+    ///    failure fails the invocation and changes nothing, so an operator
+    ///    without the quorum cannot consume a nonce.
+    /// 4. **Expiry and allowlist** — if the ledger timestamp is past
+    ///    `request.expires_at`, or the recipient is not allowlisted (closed by
+    ///    default) and `open_recipients` is off, the quorum-approved request is
+    ///    rejected: the nonce is consumed, [`WithdrawRejected`] is emitted and
+    ///    [`WithdrawOutcome::Rejected`] is returned. No funds move.
+    /// 5. **Transfer** — consume the nonce, transfer via the token contract,
+    ///    emit [`WithdrawExecuted`].
     ///
-    /// Soroban rolls back all effects, including events, when an invocation
-    /// fails. Policy-level rejections (steps 1–3) are therefore returned as
-    /// [`WithdrawOutcome::Rejected`] and recorded with a [`WithdrawRejected`]
-    /// event without moving funds; a malformed or invalid signature (step 4)
-    /// fails the invocation and leaves no on-chain trace beyond the failed
-    /// transaction itself.
+    /// Not enforced in this proof: token limits and the rescue-vault exemption.
     pub fn withdraw(
         env: Env,
         request: WithdrawRequest,
         approvals: Vec<PqApproval>,
     ) -> Result<WithdrawOutcome, Error> {
-        todo!()
+        // 1. Operator.
+        storage::operator(&env).require_auth();
+        if request.amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        // 2. Replay: fail before verification, leaving no trace.
+        if storage::is_nonce_used(&env, request.nonce) {
+            return Err(Error::NonceAlreadyUsed);
+        }
+
+        // 3. M-of-N ML-DSA over the canonical message.
+        let msg = message::withdraw_message(&env, &request);
+        let signer_indices = verify_quorum::<NativeHostVerifier>(&env, &msg, &approvals)?;
+
+        // From here on the request is approved by the quorum.
+        storage::bump_instance(&env);
+        storage::consume_nonce(&env, request.nonce);
+
+        // 4. Expiry and allowlist: recorded rejection, no transfer.
+        if let Some(reason) = rejection(&env, &request) {
+            WithdrawRejected {
+                token: request.token,
+                to: request.to,
+                amount: request.amount,
+                nonce: request.nonce,
+                reason,
+            }
+            .publish(&env);
+            return Ok(WithdrawOutcome::Rejected(reason));
+        }
+
+        // 5. Transfer.
+        token::TokenClient::new(&env, &request.token).transfer(
+            &env.current_contract_address(),
+            &request.to,
+            &request.amount,
+        );
+        WithdrawExecuted {
+            token: request.token,
+            to: request.to,
+            amount: request.amount,
+            nonce: request.nonce,
+            signer_indices,
+        }
+        .publish(&env);
+        Ok(WithdrawOutcome::Executed)
     }
 
     // ---------------------------------------------------------------------
@@ -295,22 +376,22 @@ impl QryptonVault {
 
     /// The current operator address.
     pub fn operator(env: Env) -> Address {
-        todo!()
+        storage::operator(&env)
     }
 
     /// The current PQ signer set.
     pub fn signers(env: Env) -> Vec<PqPublicKey> {
-        todo!()
+        storage::signers(&env)
     }
 
     /// The current approval threshold (M).
     pub fn threshold(env: Env) -> u32 {
-        todo!()
+        storage::threshold(&env)
     }
 
     /// The current withdrawal policy.
     pub fn policy(env: Env) -> Policy {
-        todo!()
+        storage::policy(&env)
     }
 
     /// The pending operator change, if any.
@@ -330,6 +411,50 @@ impl QryptonVault {
 
     /// Whether `nonce` has already been consumed.
     pub fn is_nonce_used(env: Env, nonce: u64) -> bool {
-        todo!()
+        storage::is_nonce_used(&env, nonce)
     }
+}
+
+/// Verifies that `approvals` contain at least `threshold` valid signatures over
+/// `msg` from distinct members of the current signer set. Returns the signer
+/// indices that were counted.
+fn verify_quorum<V: PqVerifier>(
+    env: &Env,
+    msg: &Bytes,
+    approvals: &Vec<PqApproval>,
+) -> Result<Vec<u32>, Error> {
+    let signers = storage::signers(env);
+    let threshold = storage::threshold(env);
+    let mut counted: Vec<u32> = Vec::new(env);
+    for approval in approvals.iter() {
+        let index = approval.signer_index;
+        if index >= signers.len() {
+            return Err(Error::UnknownSigner);
+        }
+        if counted.contains(index) {
+            return Err(Error::DuplicateApproval);
+        }
+        let key = signers.get_unchecked(index);
+        V::verify(env, &key, msg, &approval.signature).map_err(|e| match e {
+            VerifyError::AlgorithmMismatch => Error::AlgorithmMismatch,
+            VerifyError::InvalidSignature => Error::InvalidSignature,
+        })?;
+        counted.push_back(index);
+    }
+    if counted.len() < threshold {
+        return Err(Error::InsufficientApprovals);
+    }
+    Ok(counted)
+}
+
+/// Expiry and allowlist checks for a quorum-approved request.
+fn rejection(env: &Env, request: &WithdrawRequest) -> Option<RejectReason> {
+    if env.ledger().timestamp() > request.expires_at {
+        return Some(RejectReason::Expired);
+    }
+    let policy = storage::policy(env);
+    if !policy.open_recipients && !policy.allowlist.contains(&request.to) {
+        return Some(RejectReason::RecipientNotAllowed);
+    }
+    None
 }

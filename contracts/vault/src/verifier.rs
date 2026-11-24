@@ -1,8 +1,8 @@
 //! ML-DSA signature verification behind a trait.
 //!
 //! The vault never implements ML-DSA itself. Verification is delegated to the
-//! Soroban host via [`NativeHostVerifier`]; [`MockVerifier`] exists only for
-//! unit tests of the vault's control flow.
+//! Soroban host via [`NativeHostVerifier`]. Unit tests use the same native host
+//! functions through `soroban-sdk` testutils, not a mock.
 
 use soroban_sdk::{Bytes, Env};
 
@@ -31,26 +31,13 @@ pub trait PqVerifier {
     ) -> Result<(), VerifyError>;
 }
 
-/// Verification through the native Soroban host functions introduced by
-/// Stage 1 of Stellar's Quantum Preparedness Plan (CAP-0087, Protocol 30).
+/// Verification through the native Soroban host functions of CAP-0087
+/// (Protocol 30): `env.crypto().ml_dsa_{44,65,87}_verify(public_key, message,
+/// signature, context)`, with the context left empty.
 ///
-/// **The host API is not final on the network yet.** At the time of writing:
-///
-/// * CAP-0087 specifies `verify_sig_ml_dsa_{44,65,87}(public_key, msg,
-///   signature, context)` returning `Void` and trapping on failure; final cost
-///   calibration is still marked TBD.
-/// * Protocol 30 is not yet enabled on testnet or mainnet (validator votes
-///   are scheduled but not final).
-/// * The latest stable `soroban-sdk` (29.0.1, pinned in this workspace) has no
-///   ML-DSA functions; `soroban-sdk` 30.0.0-rc.1 exposes
-///   `env.crypto().ml_dsa_{44,65,87}_verify(public_key, message, signature, context)`
-///   with fixed-size `BytesN` keys/signatures and a `context: &Bytes` (≤ 255
-///   bytes), and requires stellar-cli 30+, which is not released yet.
-///
-/// Because the host traps rather than returning `false`, an invalid signature
-/// fails the whole invocation; `VerifyError::InvalidSignature` is therefore
-/// unreachable with this verifier. The implementation will be written against
-/// the released 30.x SDK once Protocol 30 is live on testnet.
+/// The host **traps** on an invalid or malformed signature instead of
+/// returning `false`, so an invalid signature fails the whole invocation and
+/// [`VerifyError::InvalidSignature`] is never returned by this verifier.
 pub struct NativeHostVerifier;
 
 impl PqVerifier for NativeHostVerifier {
@@ -60,28 +47,20 @@ impl PqVerifier for NativeHostVerifier {
         message: &Bytes,
         signature: &PqSignature,
     ) -> Result<(), VerifyError> {
-        // 1. Match (key, signature) variants; mismatched levels → AlgorithmMismatch.
-        // 2. Call the corresponding host function with an empty context.
-        todo!("bind to the native ML-DSA host function once released")
-    }
-}
-
-/// Test-only verifier. Never compiled into the deployed contract.
-///
-/// Intended behaviour: accept a signature iff it was produced by the matching
-/// test helper for `(key, message)`, so control-flow tests can exercise
-/// thresholds, duplicates and mismatches without real ML-DSA.
-#[cfg(test)]
-pub struct MockVerifier;
-
-#[cfg(test)]
-impl PqVerifier for MockVerifier {
-    fn verify(
-        env: &Env,
-        key: &PqPublicKey,
-        message: &Bytes,
-        signature: &PqSignature,
-    ) -> Result<(), VerifyError> {
-        todo!()
+        let ctx = Bytes::new(env);
+        let crypto = env.crypto();
+        match (key, signature) {
+            (PqPublicKey::MlDsa44(pk), PqSignature::MlDsa44(sig)) => {
+                crypto.ml_dsa_44_verify(pk, message, sig, &ctx)
+            }
+            (PqPublicKey::MlDsa65(pk), PqSignature::MlDsa65(sig)) => {
+                crypto.ml_dsa_65_verify(pk, message, sig, &ctx)
+            }
+            (PqPublicKey::MlDsa87(pk), PqSignature::MlDsa87(sig)) => {
+                crypto.ml_dsa_87_verify(pk, message, sig, &ctx)
+            }
+            _ => return Err(VerifyError::AlgorithmMismatch),
+        }
+        Ok(())
     }
 }

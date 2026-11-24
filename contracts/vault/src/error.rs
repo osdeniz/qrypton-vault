@@ -41,4 +41,10 @@ pub enum Error {
     PolicyChangeAlreadyPending = 17,
     /// The policy-change time lock has not elapsed yet.
     PolicyChangeTimelocked = 18,
+    /// The request's nonce has already been consumed. Returned before any
+    /// signature verification, with no event and no state change.
+    NonceAlreadyUsed = 19,
+    /// A verifier reported an invalid signature without trapping. (The native
+    /// host verifier traps instead, failing the invocation.)
+    InvalidSignature = 20,
 }

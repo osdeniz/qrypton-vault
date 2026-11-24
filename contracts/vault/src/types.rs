@@ -142,17 +142,23 @@ pub enum PolicyChangeOutcome {
     Scheduled(u64),
 }
 
-/// Why a withdrawal was rejected without failing the invocation.
+/// Why a quorum-approved withdrawal was rejected without failing the
+/// invocation. Recorded with a `WithdrawRejected` event; the nonce is consumed.
+///
+/// A reused nonce is not a rejection but an error (`Error::NonceAlreadyUsed`):
+/// it is detected before signature verification and leaves no trace.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum RejectReason {
     Expired = 1,
-    NonceReused = 2,
+    RecipientNotAllowed = 2,
+    /// Not enforced yet (token limits arrive after this proof).
     TokenNotAllowed = 3,
+    /// Not enforced yet (token limits arrive after this proof).
     PerWithdrawalLimit = 4,
+    /// Next phase.
     WindowLimit = 5,
-    RecipientNotAllowed = 6,
 }
 
 /// Result of a withdrawal attempt.
