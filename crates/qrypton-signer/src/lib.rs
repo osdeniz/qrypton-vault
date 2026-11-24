@@ -15,16 +15,17 @@
 //! that has not yet been independently audited; in production, the HSM
 //! firmware via PKCS#11.
 //!
-//! Status: pre-alpha. Interfaces are defined; bodies are `todo!()`.
+//! Status: pre-alpha. The software keystore, approval flow and CLI work; the
+//! PKCS#11 backend is still `todo!()`.
 
-// Pre-alpha skeleton: bodies are `todo!()`, so parameters are not used yet.
-// Remove once the implementation lands.
+// The PKCS#11 backend is still `todo!()`, so its parameters are unused.
+// Remove once it lands.
 #![allow(unused_variables)]
 
 pub mod approval;
 pub mod backend;
 mod error;
 
-pub use approval::{approve_withdraw, ApprovalContext, Confirm};
+pub use approval::{approve_withdraw, precheck_policy, ApprovalContext, Confirm};
 pub use backend::KeyBackend;
 pub use error::SignerError;

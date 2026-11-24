@@ -4,7 +4,7 @@ mod pkcs11;
 mod software;
 
 pub use pkcs11::{Pkcs11Config, Pkcs11Hsm};
-pub use software::SoftwareKeystore;
+pub use software::{parse_level, SoftwareKeystore};
 
 use qrypton_types::{MlDsaLevel, PqPublicKey, PqSignature};
 

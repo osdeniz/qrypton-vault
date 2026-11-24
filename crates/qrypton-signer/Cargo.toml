@@ -16,6 +16,11 @@ name = "qrypton-signer"
 path = "src/bin/qrypton-signer.rs"
 
 [dependencies]
-qrypton-types = { workspace = true, features = ["std"] }
+qrypton-types = { workspace = true, features = ["stellar"] }
 clap = { workspace = true }
 thiserror = { workspace = true }
+fips204 = { workspace = true }
+rand_core = { workspace = true }
+zeroize = { workspace = true }
+hex = { workspace = true }
+sha2 = { workspace = true }

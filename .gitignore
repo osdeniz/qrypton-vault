@@ -12,11 +12,14 @@
 *.p12
 *.pfx
 *.keystore
+*.qks
 keystore/
 secrets/
 .stellar/
 .soroban/
 test_snapshots/
+# Testnet demo working directory (ML-DSA keystores, approvals)
+/.demo/
 
 # Editors and OS
 .idea/

@@ -3,12 +3,11 @@
 //! An approval is produced in four steps, and a signer never signs bytes it
 //! has not decoded and shown to the operator:
 //!
-//! 1. **Display** — decode the canonical message and present network, vault,
-//!    recipient, token, amount, nonce and expiry in human-readable form.
-//! 2. **Policy pre-check** — check the request against the vault's current
-//!    policy (limits, allowlist, expiry) so obviously invalid requests are
-//!    refused before any signature exists. The contract re-checks everything;
-//!    this step only avoids signing requests that would be rejected.
+//! 1. **Display** — present network, vault, recipient, token, amount, nonce and
+//!    expiry in human-readable form ([`Confirm`]).
+//! 2. **Pre-check** — refuse expired requests and, when the vault policy is
+//!    known, requests the policy would reject. The contract re-checks
+//!    everything; this step only avoids signing requests that would fail.
 //! 3. **Sign** — sign the canonical bytes with the [`KeyBackend`].
 //! 4. **Approval** — wrap the signature with the signer's index into a
 //!    [`PqApproval`].
@@ -25,11 +24,12 @@ pub trait Confirm {
 
 /// What the signer knows about the vault when approving.
 pub struct ApprovalContext<'a> {
-    /// The vault's current policy, as read from the chain.
-    pub policy: &'a Policy,
+    /// The vault's current policy, if known. Reading it from the chain is SDK
+    /// work (M3); without it only the expiry is pre-checked.
+    pub policy: Option<&'a Policy>,
     /// This signer's index in the vault's current signer set.
     pub signer_index: u32,
-    /// Current ledger timestamp used for the expiry pre-check.
+    /// Current time (UNIX seconds) used for the expiry pre-check.
     pub now: u64,
 }
 
@@ -40,17 +40,37 @@ pub fn approve_withdraw(
     ctx: &ApprovalContext<'_>,
     message: &WithdrawMessage,
 ) -> Result<PqApproval, SignerError> {
-    // 1. confirm.confirm(message)        → Declined if false
-    // 2. precheck_policy(ctx, message)   → PolicyViolation
-    // 3. backend.sign(&message.to_bytes())
-    // 4. PqApproval { signer_index, signature }
-    todo!()
+    if !confirm.confirm(message)? {
+        return Err(SignerError::Declined);
+    }
+    precheck_policy(ctx, message)?;
+    let signature = backend.sign(&message.to_bytes())?;
+    Ok(PqApproval {
+        signer_index: ctx.signer_index,
+        signature,
+    })
 }
 
-/// Off-chain mirror of the contract's expiry and policy checks.
+/// Off-chain mirror of the contract's expiry and allowlist checks.
 pub fn precheck_policy(
     ctx: &ApprovalContext<'_>,
     message: &WithdrawMessage,
 ) -> Result<(), SignerError> {
-    todo!()
+    let request = &message.request;
+    if request.amount <= 0 {
+        return Err(SignerError::PolicyViolation(
+            "amount must be positive".into(),
+        ));
+    }
+    if ctx.now > request.expires_at {
+        return Err(SignerError::PolicyViolation("request has expired".into()));
+    }
+    if let Some(policy) = ctx.policy {
+        if !policy.open_recipients && !policy.allowlist.contains(&request.to) {
+            return Err(SignerError::PolicyViolation(
+                "recipient is not on the vault allowlist".into(),
+            ));
+        }
+    }
+    Ok(())
 }
