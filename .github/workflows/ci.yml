@@ -38,6 +38,6 @@ jobs:
       - name: Install toolchain
         run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
-      - uses: stellar/stellar-cli@v28.1.0
+      - uses: stellar/stellar-cli@v30.0.1
       - name: stellar contract build
         run: stellar contract build --package qrypton-vault-contract

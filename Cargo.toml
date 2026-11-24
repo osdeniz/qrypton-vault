@@ -17,10 +17,9 @@ repository = "https://github.com/osdeniz/qrypton-vault"
 authors = ["Ömer Salih Deniz"]
 
 [workspace.dependencies]
-# Pinned to the latest stable soroban-sdk release at the time of writing.
-# ML-DSA host functions first appear in the 30.x release line (see
-# contracts/vault/src/verifier.rs); the pin moves once 30.0.0 is stable.
-soroban-sdk = { version = "=29.0.1" }
+# Pinned exactly. 30.x is the first release line with the CAP-0087 ML-DSA
+# host functions (Protocol 30); contracts must be built with stellar-cli 30+.
+soroban-sdk = { version = "=30.0.0" }
 
 qrypton-types = { path = "crates/qrypton-types", default-features = false }
 qrypton-signer = { path = "crates/qrypton-signer" }
